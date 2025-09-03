@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Filament\Resources\Berkas\Pages;
+namespace App\Filament\Resources\BerkasResource\Pages;
 
-use App\Filament\Resources\Berkas\BerkasResource;
-use Filament\Actions\CreateAction;
+use App\Filament\Resources\BerkasResource;
+use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
 
 class ListBerkas extends ListRecords
@@ -13,7 +13,7 @@ class ListBerkas extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make(),
+            Actions\CreateAction::make(),
         ];
     }
 }

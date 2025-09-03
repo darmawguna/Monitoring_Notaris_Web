@@ -1,10 +1,9 @@
 <?php
 
-namespace App\Filament\Resources\Berkas\Pages;
+namespace App\Filament\Resources\BerkasResource\Pages;
 
-use App\Filament\Resources\Berkas\BerkasResource;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\ViewAction;
+use App\Filament\Resources\BerkasResource;
+use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 
 class EditBerkas extends EditRecord
@@ -14,8 +13,7 @@ class EditBerkas extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            ViewAction::make(),
-            DeleteAction::make(),
+            Actions\DeleteAction::make(),
         ];
     }
 }
