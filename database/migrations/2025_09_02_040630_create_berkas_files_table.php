@@ -22,11 +22,9 @@ return new class extends Migration
 
             // Metadata file yang penting
             $table->string('path'); // Path penyimpanan file
-            $table->string('mime_type'); // Contoh: 'image/jpeg' atau 'application/pdf'
-            $table->unsignedInteger('size'); // Ukuran file dalam bytes
 
             // Audit trail
-            $table->foreignId('uploaded_by')->constrained('users');
+            // $table->foreignId('uploaded_by')->constrained('users');
             $table->timestamps();
         });
     }

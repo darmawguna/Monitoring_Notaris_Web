@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Berkas;
 
+use Illuminate\Database\Eloquent\Model;
 use App\Filament\Resources\Berkas\Pages\CreateBerkas;
 use App\Filament\Resources\Berkas\Pages\EditBerkas;
 use App\Filament\Resources\Berkas\Pages\ListBerkas;
@@ -54,5 +55,12 @@ class BerkasResource extends Resource
             'view' => ViewBerkas::route('/{record}'),
             'edit' => EditBerkas::route('/{record}/edit'),
         ];
+    }
+
+    public static function canCreate(): bool
+    {
+        // Izinkan pembuatan jika peran pengguna adalah Superadmin atau FrontOffice
+        $userRole = auth()->user()->role->name;
+        return $userRole === 'Superadmin' || $userRole === 'FrontOffice';
     }
 }

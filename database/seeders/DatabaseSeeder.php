@@ -17,14 +17,15 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RoleSeeder::class,
             DeadlineConfigSeeder::class,
+            UserSeeder::class, // Tambahkan UserSeeder di sini
         ]);
 
-        User::factory()->create([
-            'name' => 'Hendy',
-            'email' => 'Superadmin@gmail.com',
-            'password' => 'superadmin',
-            'role_id' => 1 // Pastikan ID 1 adalah Superadmin
-        ]);
+        // User::factory()->create([
+        //     'name' => 'Hendy',
+        //     'email' => 'Superadmin@gmail.com',
+        //     'password' => 'superadmin',
+        //     'role_id' => 1 // Pastikan ID 1 adalah Superadmin
+        // ]);
 
         // User::factory()->create([
         //     'name' => 'Test User',
