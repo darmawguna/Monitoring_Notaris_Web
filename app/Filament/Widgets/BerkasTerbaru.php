@@ -11,6 +11,10 @@ use Filament\Widgets\TableWidget as BaseWidget;
 
 class BerkasTerbaru extends BaseWidget
 {
+    public static function canView(): bool
+    {
+        return auth()->user()->role->name === 'Superadmin';
+    }
     protected static ?int $sort = 3; // Urutan di dashboard
     protected int|string|array $columnSpan = 'full'; // Agar widget memenuhi lebar
 
@@ -18,6 +22,8 @@ class BerkasTerbaru extends BaseWidget
     {
         return 'Berkas Terbaru';
     }
+    protected static bool $isLazy = false;
+
 
     public function table(Tables\Table $table): Tables\Table
     {
@@ -25,9 +31,11 @@ class BerkasTerbaru extends BaseWidget
             ->query(Berkas::query())
             ->defaultSort('created_at', 'desc') // Tampilkan yang terbaru di atas
             ->columns([
-                TextColumn::make('nomor')->label('Nomor Berkas'),
-                TextColumn::make('nama_berkas'),
-                TextColumn::make('pembeli'),
+                TextColumn::make('nomor')->label('Nomor Berkas')
+                    ->searchable(),
+                TextColumn::make('nama_berkas')
+                    ->searchable(),
+                TextColumn::make('penjual'),
                 BadgeColumn::make('current_stage_key')->label('Tahap Saat Ini'),
                 TextColumn::make('created_at')->label('Tanggal Dibuat')->date('d M Y'),
             ])

@@ -18,7 +18,7 @@ class BerkasChart extends ChartWidget
      */
     public static function canView(): bool
     {
-        return auth()->user()->role->name === 'Superadmin';
+        return auth()->user()->role->name === 'FrontOffice';
     }
 
     protected function getData(): array

@@ -29,7 +29,7 @@ class UserResource extends Resource
     protected static ?string $pluralModelLabel = 'Manajemen Pengguna';
     protected static ?string $navigationLabel = 'Pengguna';
     protected static ?string $navigationGroup = 'Pengaturan'; // Grupkan di bawah menu "Pengaturan"
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 2;
 
     /**
      * Sembunyikan menu ini dari semua orang kecuali Superadmin.

@@ -24,7 +24,7 @@ class KwitansiResource extends Resource
     protected static ?string $pluralModelLabel = 'Audit Kwitansi';
     protected static ?string $navigationLabel = 'Kwitansi';
     protected static ?string $navigationGroup = 'Keuangan';
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 1;
 
     /**
      * Sembunyikan menu ini dari semua orang kecuali Superadmin.

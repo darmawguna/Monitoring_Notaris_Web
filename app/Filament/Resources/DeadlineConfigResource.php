@@ -22,7 +22,7 @@ class DeadlineConfigResource extends Resource
     protected static ?string $pluralModelLabel = 'Konfigurasi Deadline';
     protected static ?string $navigationLabel = 'Deadline';
     protected static ?string $navigationGroup = 'Pengaturan'; // Grupkan di bawah menu "Pengaturan"
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 3;
 
     /**
      * Sembunyikan menu ini dari semua orang kecuali Superadmin.

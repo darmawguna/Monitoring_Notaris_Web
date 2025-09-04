@@ -22,6 +22,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Tables\Actions\Action;
+use Filament\Notifications\Actions\Action as NotificationAction; // Perhatikan alias 'as'
 
 
 class TugasResource extends Resource
@@ -93,85 +94,83 @@ class TugasResource extends Resource
                     ->label('Proses Berkas')
                     ->icon('heroicon-o-arrow-right-circle')
                     ->form(function (Berkas $record) {
-                        // Tentukan role selanjutnya berdasarkan tahap saat ini
+                        // ... (logika form tetap sama)
                         $nextRoleName = match ($record->current_stage_key) {
                             StageKey::PETUGAS_2 => 'Pajak',
                             StageKey::PAJAK => 'Petugas5',
                             default => null,
                         };
-
-                        // Hanya tampilkan dropdown jika ada tahap selanjutnya
                         if ($nextRoleName) {
                             return [
-                                Textarea::make('notes')
-                                    ->label('Catatan Pengerjaan')
-                                    ->required(),
+                                Textarea::make('notes')->label('Catatan Pengerjaan')->required(),
                                 Select::make('next_assignee_id')
                                     ->label("Teruskan ke Petugas {$nextRoleName}")
-                                    ->options(
-                                        User::whereHas('role', fn($query) => $query->where('name', $nextRoleName))->pluck('name', 'id')
-                                    )
-                                    ->searchable()
-                                    ->preload()
-                                    ->required(),
+                                    ->options(User::whereHas('role', fn($query) => $query->where('name', $nextRoleName))->pluck('name', 'id'))
+                                    ->searchable()->preload()->required(),
                             ];
                         }
-
-                        // Jika ini tahap terakhir (Petugas 5)
                         return [
-                            Textarea::make('notes')
-                                ->label('Catatan Pengerjaan Final')
-                                ->required(),
+                            Textarea::make('notes')->label('Catatan Pengerjaan Final')->required(),
                         ];
                     })
                     ->action(function (Berkas $record, array $data): void {
-                        // 1. Update progres saat ini
+                        // ... (logika update progres dan berkas tetap sama)
                         $currentProgress = $record->progress()->where('assignee_id', auth()->id())->latest()->first();
                         if ($currentProgress) {
-                            $currentProgress->update([
-                                'notes' => $data['notes'],
-                                'status' => 'done',
-                                'completed_at' => now(),
-                            ]);
+                            $currentProgress->update(['notes' => $data['notes'], 'status' => 'done', 'completed_at' => now()]);
                         }
-
-                        // Tentukan tahap & role selanjutnya
                         $nextStage = null;
                         $nextAssigneeId = $data['next_assignee_id'] ?? null;
-
                         if ($record->current_stage_key === StageKey::PETUGAS_2)
                             $nextStage = StageKey::PAJAK;
                         if ($record->current_stage_key === StageKey::PAJAK)
                             $nextStage = StageKey::PETUGAS_5;
 
-                        // Jika ada tahap selanjutnya, buat progres baru & update berkas
-                        if ($nextStage) {
-                            // 2. Buat progres baru untuk petugas selanjutnya
-                            $record->progress()->create([
-                                'stage_key' => $nextStage,
-                                'status' => 'pending',
-                                'assignee_id' => $nextAssigneeId,
-                                'started_at' => now(),
-                            ]);
+                        // --- LOGIKA NOTIFIKASI DIMULAI DARI SINI ---
+            
+                        // Dapatkan objek pengguna yang akan menerima tugas
+                        $nextAssignee = $nextAssigneeId ? User::find($nextAssigneeId) : null;
 
-                            // 3. Update 'papan status' di berkas utama
-                            $record->update([
-                                'current_stage_key' => $nextStage,
-                                'current_assignee_id' => $nextAssigneeId,
-                            ]);
+                        if ($nextStage && $nextAssignee) {
+                            // ... (logika pembuatan progres baru dan update berkas)
+                            $record->progress()->create(['stage_key' => $nextStage, 'status' => 'pending', 'assignee_id' => $nextAssigneeId, 'started_at' => now()]);
+                            $record->update(['current_stage_key' => $nextStage, 'current_assignee_id' => $nextAssigneeId]);
+
+                            // Kirim notifikasi ke petugas selanjutnya
+                            Notification::make()
+                                ->title('Anda menerima tugas baru!')
+                                ->body("Berkas '{$record->nama_berkas}' telah diteruskan kepada Anda.")
+                                ->icon('heroicon-o-inbox-arrow-down')
+                                ->actions([
+                                    NotificationAction::make('view')
+                                        ->label('Lihat Tugas')
+                                        ->url(TugasResource::getUrl('index')) // Arahkan ke halaman "Tugas Saya"
+                                        ->markAsRead(),
+                                ])
+                                ->sendToDatabase($nextAssignee); // Kirim ke pengguna spesifik
+            
                         } else {
-                            // Jika ini tahap terakhir
-                            $record->update([
-                                'status_overall' => 'selesai',
-                                'current_stage_key' => StageKey::SELESAI,
-                                'current_assignee_id' => null, // Tidak ada lagi yang ditugaskan
-                            ]);
+                            // ... (logika jika ini tahap terakhir)
+                            $record->update(['status_overall' => 'selesai', 'current_stage_key' => StageKey::SELESAI, 'current_assignee_id' => null]);
+                            // Cari semua Superadmin
+                            $superadmins = User::whereHas('role', fn($query) => $query->where('name', 'Superadmin'))->get();
+
+                            // Kirim notifikasi ke semua Superadmin
+                            Notification::make()
+                                ->title('Sebuah Berkas Telah Selesai!')
+                                ->body("Berkas '{$record->nama_berkas}' telah menyelesaikan seluruh alur kerja.")
+                                ->icon('heroicon-o-check-badge')
+                                ->actions([
+                                    NotificationAction::make('view')
+                                        ->label('Lihat Berkas')
+                                        // Arahkan ke halaman detail berkas yang sudah selesai
+                                        ->url(BerkasResource::getUrl('view', ['record' => $record]))
+                                        ->markAsRead(),
+                                ])
+                                ->sendToDatabase($superadmins); // Kirim ke koleksi pengguna
                         }
 
-                        Notification::make()
-                            ->title('Berkas berhasil diproses')
-                            ->success()
-                            ->send();
+                        Notification::make()->title('Berkas berhasil diproses')->success()->send();
                     }),
             ])
             ->bulkActions([]);

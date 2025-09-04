@@ -40,6 +40,12 @@ class BerkasResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
+    public static function canViewAny(): bool
+    {
+        $userRole = auth()->user()->role->name;
+        return in_array($userRole, ['Superadmin', 'FrontOffice']);
+    }
+
     /**
      * The column to use as the main title in global search results.
      */

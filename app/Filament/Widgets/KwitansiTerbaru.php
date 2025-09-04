@@ -11,6 +11,10 @@ use Filament\Widgets\TableWidget as BaseWidget;
 
 class KwitansiTerbaru extends BaseWidget
 {
+    public static function canView(): bool
+    {
+        return auth()->user()->role->name === 'Superadmin';
+    }
     protected static ?int $sort = 4;
     protected int|string|array $columnSpan = 'full';
 
