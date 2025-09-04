@@ -15,18 +15,14 @@ return new class extends Migration
             $table->id();
             // Relasi ke tabel 'berkas', jika berkas dihapus, filenya juga ikut terhapus
             $table->foreignId('berkas_id')->constrained()->onDelete('cascade');
-
             // Kolom 'type' untuk menandai jenis file secara dinamis
             // Contoh isinya: 'ktp_suami', 'ktp_istri', 'kk', 'sertifikat'
             $table->string('type');
 
             // Metadata file yang penting
             $table->string('path'); // Path penyimpanan file
-            $table->string('mime_type'); // Contoh: 'image/jpeg' atau 'application/pdf'
-            $table->unsignedInteger('size'); // Ukuran file dalam bytes
-
             // Audit trail
-            $table->foreignId('uploaded_by')->constrained('users');
+            // $table->foreignId('uploaded_by')->constrained('users');
             $table->timestamps();
         });
     }

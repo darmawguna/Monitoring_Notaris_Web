@@ -39,5 +39,21 @@ class CreateBerkas extends CreateRecord
             'started_at' => now(),
             'completed_at' => now(), // Karena proses ini instan
         ]);
+        // --- INI LOGIKA BARU ---
+        // 2. Buat Kwitansi secara otomatis
+        $berkas->receipt()->create([
+            'receipt_number' => 'KW-' . $berkas->nomor, // Gunakan nomor berkas agar unik
+            'amount' => $berkas->total_cost, // Jumlah di kwitansi = total biaya
+            'issued_at' => now(),
+            'issued_by' => auth()->id(),
+            'payment_method' => 'pending', // Status awal pembayaran
+        ]);
+
+        // 3. Set total_paid awal menjadi 0
+        $berkas->update(['total_paid' => 0]);
+    }
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
     }
 }
