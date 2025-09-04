@@ -40,6 +40,21 @@ class BerkasResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
+    /**
+     * The column to use as the main title in global search results.
+     */
+    protected static ?string $recordTitleAttribute = 'nama_berkas';
+
+    /**
+     * The columns that should be searched globally.
+     */
+    protected static array $globallySearchableAttributes = [
+        'nomor',
+        'nama_berkas',
+        'penjual',
+        'pembeli',
+    ];
+
     public static function form(Form $form): Form
     {
         return $form
@@ -130,7 +145,7 @@ class BerkasResource extends Resource
                 TextColumn::make('nama_berkas')
                     ->searchable()
                     ->limit(25),
-                TextColumn::make('pembeli')
+                TextColumn::make('penjual')
                     ->searchable(),
                 BadgeColumn::make('current_stage_key')
                     ->label('Tahap Saat Ini'),

@@ -25,4 +25,19 @@ class CreateBerkas extends CreateRecord
 
         return $data;
     }
+    protected function afterCreate(): void
+    {
+        // Dapatkan record Berkas yang baru saja dibuat
+        $berkas = $this->getRecord();
+
+        // Buat entri pertama di tabel 'progress' melalui relasi
+        $berkas->progress()->create([
+            'stage_key' => StageKey::FRONT_OFFICE, // Tahapan yang BARU SAJA SELESAI
+            'status' => 'done',
+            'assignee_id' => $berkas->created_by, // Petugas yang menyelesaikan adalah pembuatnya
+            'notes' => 'Berkas berhasil dibuat dan diteruskan.',
+            'started_at' => now(),
+            'completed_at' => now(), // Karena proses ini instan
+        ]);
+    }
 }

@@ -51,7 +51,7 @@ class User extends Authenticatable
     public function role(): BelongsTo
     {
         return $this->belongsTo(Role::class);
-    }
+}
 
     // Tambahan: Relasi lain untuk kemudahan query
     public function createdBerkas(): HasMany
