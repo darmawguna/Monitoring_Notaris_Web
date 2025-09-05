@@ -1,0 +1,28 @@
+<svg width="400" height="100" viewBox="0 0 400 100" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <!-- 
+      Logo Lengkap untuk NotarisFlow (Ikon + Wordmark)
+      - Menggabungkan Logo Mark dengan tipografi yang bersih.
+      - Font: Inter (diasumsikan sudah di-load oleh browser atau di-embed).
+      - Cocok digunakan di header aplikasi, halaman login, atau kop surat.
+    -->
+    <defs>
+        <linearGradient id="grad_blue_full" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#1E3A8A;stop-opacity:1" />
+        </linearGradient>
+    </defs>
+
+    <!-- Logo Mark (Ikon) -->
+    <g transform="scale(0.8) translate(10, 10)">
+        <path d="M10,20 H70 L70,100 H10 Z" fill="url(#grad_blue_full)" opacity="0.5" />
+        <path d="M15,15 H75 L75,95 H15 Z" fill="#ffffff" opacity="0.2" />
+        <path d="M20,10 H80 L80,90 H20 Z" fill="url(#grad_blue_full)" />
+        <path d="M30,65 L50,45 L70,65 L50,85 Z" fill="#FBBF24" />
+        <path d="M30,75 L50,55 L70,75 L50,95 Z" fill="#F59E0B" />
+    </g>
+
+    <!-- Wordmark (Teks) -->
+    <text x="100" y="65" font-family="Inter, sans-serif" font-size="40" font-weight="700" fill="#111827">
+        Notaris<tspan fill="#f59e0b">Flow</tspan>
+    </text>
+</svg>
