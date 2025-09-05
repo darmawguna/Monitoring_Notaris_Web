@@ -33,6 +33,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Filament\Infolists\Components\Actions\Action;
+use Filament\Infolists\Components\ViewEntry;
 
 class BerkasResource extends Resource
 {
@@ -180,22 +181,19 @@ class BerkasResource extends Resource
             ->schema([
                 InfolistSection::make('Detail Berkas & Klien')
                     ->schema([
-                        TextEntry::make('nama_berkas')->inlineLabel(),
-                        TextEntry::make('nomor')->inlineLabel(),
-                        TextEntry::make('penjual')->inlineLabel(),
-                        TextEntry::make('pembeli')->inlineLabel(),
-                        TextEntry::make('sertifikat_nama')->inlineLabel(),
-                        TextEntry::make('persetujuan')->inlineLabel(),
-                    ])->columns(2),
+                        // Ganti semua TextEntry dengan satu ViewEntry
+                        ViewEntry::make('berkasDetails')
+                            ->hiddenLabel()
+                            ->view('filament.infolists.sections.berkas-details-section'),
+                    ]),
+
                 InfolistSection::make('Status & Finansial')
                     ->schema([
-                        TextEntry::make('status_overall')->badge()->inlineLabel(),
-                        TextEntry::make('current_stage_key')->label('Tahap Saat Ini')->badge()->inlineLabel(),
-                        TextEntry::make('currentAssignee.name')->label('Ditugaskan Ke')->inlineLabel(),
-                        TextEntry::make('total_cost')->money('IDR')->inlineLabel(),
-                        TextEntry::make('total_paid')->money('IDR')->inlineLabel(),
-                        TextEntry::make('deadline_at')->dateTime()->inlineLabel(),
-                    ])->columns(2),
+                        // Ganti semua TextEntry dengan satu ViewEntry
+                        ViewEntry::make('statusFinancial')
+                            ->hiddenLabel()
+                            ->view('filament.infolists.sections.status-financial-section'),
+                    ]),
                 InfolistSection::make('Lampiran Berkas')
                     ->schema([
                         RepeatableEntry::make('files')
@@ -213,13 +211,13 @@ class BerkasResource extends Resource
                                     ->height(80)
                                     // Membuat seluruh gambar bisa diklik untuk memicu Aksi
                                     ->action(
-                                        \Filament\Infolists\Components\Actions\Action::make('previewImage')
+                                        Action::make('previewImage')
                                             ->label('Lihat Ukuran Penuh')
                                             ->modalHeading('Pratinjau Lampiran')
                                             // Ganti ->infolist() dengan ->modalContent() untuk passing data manual
                                             ->modalContent(
                                                 fn($record) =>
-                                                \Filament\Infolists\Infolist::make()
+                                                Infolist::make()
                                                     ->record($record) // <-- Ini adalah bagian yang hilang
                                                     ->schema([
                                                         ImageEntry::make('path')
@@ -255,25 +253,10 @@ class BerkasResource extends Resource
 
                 InfolistSection::make('Riwayat & Durasi Pengerjaan')
                     ->schema([
-                        RepeatableEntry::make('progress')
+                        // Ganti semua RepeatableEntry dengan satu ViewEntry
+                        ViewEntry::make('progressHistory')
                             ->hiddenLabel()
-                            ->schema([
-                                TextEntry::make('stage_key')->label('Tahapan'),
-                                TextEntry::make('assignee.name')->label('Petugas'),
-                                TextEntry::make('started_at')->label('Mulai Dikerjakan')->dateTime('d M Y, H:i'),
-                                TextEntry::make('completed_at')->label('Selesai Dikerjakan')->dateTime('d M Y, H:i'),
-                                TextEntry::make('duration')
-                                    ->label('Durasi Pengerjaan')
-                                    ->state(function ($record): string {
-                                        if (!$record->started_at || !$record->completed_at) {
-                                            return 'Dalam proses';
-                                        }
-                                        $start = Carbon::parse($record->started_at);
-                                        $end = Carbon::parse($record->completed_at);
-                                        return $start->diffForHumans($end, true);
-                                    }),
-                            ])
-                            ->columns(4),
+                            ->view('filament.infolists.sections.progress-history-section'),
                     ])->collapsible(),
             ]);
     }

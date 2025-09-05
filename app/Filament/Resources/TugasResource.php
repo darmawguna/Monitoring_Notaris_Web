@@ -2,28 +2,25 @@
 
 namespace App\Filament\Resources;
 
+use App\Enums\StageKey;
 use App\Filament\Resources\TugasResource\Pages;
-use App\Filament\Resources\TugasResource\RelationManagers;
 use App\Models\Berkas;
-use Filament\Forms;
-use Filament\Forms\Form;
-use Filament\Resources\Resource;
+use App\Models\DeadlineConfig;
 use App\Models\User;
-use Filament\Tables;
-use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Form;
+use Filament\Notifications\Actions\Action as NotificationAction;
+use Filament\Notifications\Notification;
+use Filament\Resources\Resource;
+use Filament\Tables\Actions\Action;
 use Filament\Tables\Actions\ViewAction;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Contracts\HasTable;
-use App\Enums\StageKey;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
-use Filament\Notifications\Notification;
-use Filament\Tables\Actions\Action;
-use Filament\Notifications\Actions\Action as NotificationAction; // Perhatikan alias 'as'
-
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 
 class TugasResource extends Resource
 {
@@ -41,35 +38,27 @@ class TugasResource extends Resource
         return !in_array($userRole, ['Superadmin', 'FrontOffice']);
     }
 
-
-    /**
-     * INTI DARI FITUR "TUGAS SAYA":
-     * Memodifikasi query dasar untuk resource ini agar hanya menampilkan
-     * berkas yang ditugaskan kepada pengguna yang sedang login.
-     */
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->where('current_assignee_id', auth()->id());
     }
 
-    // Kita tidak butuh form di sini, jadi kita biarkan kosong.
     public static function form(Form $form): Form
     {
         return $form->schema([]);
     }
 
-    // Konfigurasi tabel untuk halaman "Tugas Saya".
     public static function table(Table $table): Table
     {
         return $table
             ->columns([
-                // TextColumn::make('No.')
-                //     ->rowIndex()
-                //     ->formatStateUsing(function (HasTable $livewire, string $state): string {
-                //         $currentPage = $livewire->getTable()->getRecords()->currentPage();
-                //         $perPage = $livewire->getTable()->getRecords()->perPage();
-                //         return (string) (($currentPage - 1) * $perPage + (int) $state + 1);
-                //     }),
+                TextColumn::make('No.')
+                    ->rowIndex()
+                    ->formatStateUsing(function (HasTable $livewire, string $state): string {
+                        $currentPage = $livewire->getTable()->getRecords()->currentPage();
+                        $perPage = $livewire->getTable()->getRecords()->perPage();
+                        return (string) (($currentPage - 1) * $perPage + (int) $state + 1);
+                    }),
                 TextColumn::make('nomor')
                     ->label('Nomor Berkas')
                     ->searchable(),
@@ -81,20 +70,14 @@ class TugasResource extends Resource
                 TextColumn::make('deadline_at')
                     ->label('Deadline')
                     ->date('d M Y'),
-                
             ])
-            ->filters([
-                // Filter tidak diperlukan karena data sudah terfilter otomatis.
-            ])
+            ->filters([])
             ->actions([
                 ViewAction::make()->url(fn(Berkas $record) => BerkasResource::getUrl('view', ['record' => $record])),
-
-                // --- INI ADALAH AKSI WORKFLOW BARU ---
                 Action::make('process')
                     ->label('Proses Berkas')
                     ->icon('heroicon-o-arrow-right-circle')
                     ->form(function (Berkas $record) {
-                        // ... (logika form tetap sama)
                         $nextRoleName = match ($record->current_stage_key) {
                             StageKey::PETUGAS_2 => 'Pajak',
                             StageKey::PAJAK => 'Petugas5',
@@ -114,11 +97,16 @@ class TugasResource extends Resource
                         ];
                     })
                     ->action(function (Berkas $record, array $data): void {
-                        // ... (logika update progres dan berkas tetap sama)
-                        $currentProgress = $record->progress()->where('assignee_id', auth()->id())->latest()->first();
+                        $currentProgress = $record->progress()
+                            ->where('stage_key', $record->current_stage_key)
+                            ->where('assignee_id', auth()->id())
+                            ->where('status', 'pending')
+                            ->first();
+
                         if ($currentProgress) {
                             $currentProgress->update(['notes' => $data['notes'], 'status' => 'done', 'completed_at' => now()]);
                         }
+
                         $nextStage = null;
                         $nextAssigneeId = $data['next_assignee_id'] ?? null;
                         if ($record->current_stage_key === StageKey::PETUGAS_2)
@@ -126,17 +114,24 @@ class TugasResource extends Resource
                         if ($record->current_stage_key === StageKey::PAJAK)
                             $nextStage = StageKey::PETUGAS_5;
 
-                        // --- LOGIKA NOTIFIKASI DIMULAI DARI SINI ---
-            
-                        // Dapatkan objek pengguna yang akan menerima tugas
                         $nextAssignee = $nextAssigneeId ? User::find($nextAssigneeId) : null;
 
                         if ($nextStage && $nextAssignee) {
-                            // ... (logika pembuatan progres baru dan update berkas)
-                            $record->progress()->create(['stage_key' => $nextStage, 'status' => 'pending', 'assignee_id' => $nextAssigneeId, 'started_at' => now()]);
+                            // Hitung dan simpan deadline untuk tahap selanjutnya
+                            $deadlineDays = DeadlineConfig::where('stage_key', $nextStage)->value('default_days') ?? 3;
+                            $startedAt = now();
+                            $deadline = Carbon::parse($startedAt)->addDays($deadlineDays);
+
+                            $record->progress()->create([
+                                'stage_key' => $nextStage,
+                                'status' => 'pending',
+                                'assignee_id' => $nextAssigneeId,
+                                'started_at' => $startedAt,
+                                'deadline' => $deadline, // Simpan deadline
+                            ]);
+
                             $record->update(['current_stage_key' => $nextStage, 'current_assignee_id' => $nextAssigneeId]);
 
-                            // Kirim notifikasi ke petugas selanjutnya
                             Notification::make()
                                 ->title('Anda menerima tugas baru!')
                                 ->body("Berkas '{$record->nama_berkas}' telah diteruskan kepada Anda.")
@@ -144,18 +139,13 @@ class TugasResource extends Resource
                                 ->actions([
                                     NotificationAction::make('view')
                                         ->label('Lihat Tugas')
-                                        ->url(TugasResource::getUrl('index')) // Arahkan ke halaman "Tugas Saya"
+                                        ->url(TugasResource::getUrl('index'))
                                         ->markAsRead(),
                                 ])
-                                ->sendToDatabase($nextAssignee); // Kirim ke pengguna spesifik
-            
+                                ->sendToDatabase($nextAssignee);
                         } else {
-                            // ... (logika jika ini tahap terakhir)
                             $record->update(['status_overall' => 'selesai', 'current_stage_key' => StageKey::SELESAI, 'current_assignee_id' => null]);
-                            // Cari semua Superadmin
                             $superadmins = User::whereHas('role', fn($query) => $query->where('name', 'Superadmin'))->get();
-
-                            // Kirim notifikasi ke semua Superadmin
                             Notification::make()
                                 ->title('Sebuah Berkas Telah Selesai!')
                                 ->body("Berkas '{$record->nama_berkas}' telah menyelesaikan seluruh alur kerja.")
@@ -163,13 +153,11 @@ class TugasResource extends Resource
                                 ->actions([
                                     NotificationAction::make('view')
                                         ->label('Lihat Berkas')
-                                        // Arahkan ke halaman detail berkas yang sudah selesai
                                         ->url(BerkasResource::getUrl('view', ['record' => $record]))
                                         ->markAsRead(),
                                 ])
-                                ->sendToDatabase($superadmins); // Kirim ke koleksi pengguna
+                                ->sendToDatabase($superadmins);
                         }
-
                         Notification::make()->title('Berkas berhasil diproses')->success()->send();
                     }),
             ])
