@@ -32,15 +32,17 @@ class TugasResource extends Resource
     protected static ?string $navigationLabel = 'Tugas Saya';
     protected static ?int $navigationSort = -1;
 
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->where('current_assignee_id', auth()->id())
+            // Tambahkan with() untuk memuat relasi yang dibutuhkan di tabel.
+            ->with(['currentAssignee']);
+    }
     public static function canViewAny(): bool
     {
         $userRole = auth()->user()->role->name;
         return !in_array($userRole, ['Superadmin', 'FrontOffice']);
-    }
-
-    public static function getEloquentQuery(): Builder
-    {
-        return parent::getEloquentQuery()->where('current_assignee_id', auth()->id());
     }
 
     public static function form(Form $form): Form
@@ -73,7 +75,7 @@ class TugasResource extends Resource
             ])
             ->filters([])
             ->actions([
-                ViewAction::make()->url(fn(Berkas $record) => BerkasResource::getUrl('view', ['record' => $record])),
+                // ViewAction::make()->url(fn(Berkas $record) => BerkasResource::getUrl('view', ['record' => $record])),
                 Action::make('process')
                     ->label('Proses Berkas')
                     ->icon('heroicon-o-arrow-right-circle')
@@ -97,16 +99,29 @@ class TugasResource extends Resource
                         ];
                     })
                     ->action(function (Berkas $record, array $data): void {
+                        // --- INI LOGIKA YANG DIPERBARUI ---
+                        // 1. Cari progres terakhir yang masih 'pending' untuk pengguna ini, pada berkas ini.
                         $currentProgress = $record->progress()
-                            ->where('stage_key', $record->current_stage_key)
                             ->where('assignee_id', auth()->id())
                             ->where('status', 'pending')
+                            ->latest('started_at')
                             ->first();
 
+                        // 2. Jika ditemukan, update sebagai 'done'.
                         if ($currentProgress) {
-                            $currentProgress->update(['notes' => $data['notes'], 'status' => 'done', 'completed_at' => now()]);
+                            $currentProgress->update([
+                                'notes' => $data['notes'],
+                                'status' => 'done',
+                                'completed_at' => now(),
+                            ]);
+                        } else {
+                            // Jika tidak ditemukan karena alasan aneh, beri tahu user dan hentikan.
+                            Notification::make()->title('Tidak ada tugas aktif yang ditemukan untuk Anda pada berkas ini.')->danger()->send();
+                            return;
                         }
-
+                        // --- AKHIR DARI PERUBAHAN ---
+            
+                        // Logika untuk meneruskan tugas
                         $nextStage = null;
                         $nextAssigneeId = $data['next_assignee_id'] ?? null;
                         if ($record->current_stage_key === StageKey::PETUGAS_2)
@@ -117,7 +132,6 @@ class TugasResource extends Resource
                         $nextAssignee = $nextAssigneeId ? User::find($nextAssigneeId) : null;
 
                         if ($nextStage && $nextAssignee) {
-                            // Hitung dan simpan deadline untuk tahap selanjutnya
                             $deadlineDays = DeadlineConfig::where('stage_key', $nextStage)->value('default_days') ?? 3;
                             $startedAt = now();
                             $deadline = Carbon::parse($startedAt)->addDays($deadlineDays);
@@ -127,7 +141,7 @@ class TugasResource extends Resource
                                 'status' => 'pending',
                                 'assignee_id' => $nextAssigneeId,
                                 'started_at' => $startedAt,
-                                'deadline' => $deadline, // Simpan deadline
+                                'deadline' => $deadline,
                             ]);
 
                             $record->update(['current_stage_key' => $nextStage, 'current_assignee_id' => $nextAssigneeId]);

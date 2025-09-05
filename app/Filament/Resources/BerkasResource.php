@@ -34,6 +34,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Filament\Infolists\Components\Actions\Action;
 use Filament\Infolists\Components\ViewEntry;
+use Illuminate\Database\Eloquent\Model;
 
 class BerkasResource extends Resource
 {
@@ -47,6 +48,12 @@ class BerkasResource extends Resource
         return in_array($userRole, ['Superadmin', 'FrontOffice']);
     }
 
+    public static function getEloquentQuery(): Builder
+    {
+        // Secara otomatis memuat relasi 'currentAssignee' dan 'createdBy'
+        // untuk mencegah N+1 query di tabel dan infolist.
+        return parent::getEloquentQuery()->with(['currentAssignee', 'createdBy']);
+    }
     /**
      * The column to use as the main title in global search results.
      */
@@ -61,6 +68,12 @@ class BerkasResource extends Resource
         'penjual',
         'pembeli',
     ];
+
+    public static function canEdit(Model $record): bool
+    {
+        // Hanya izinkan edit jika peran pengguna adalah Superadmin.
+        return auth()->user()->role->name === 'Superadmin';
+    }
 
     public static function form(Form $form): Form
     {
