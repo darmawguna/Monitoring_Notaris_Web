@@ -21,6 +21,10 @@ return new class extends Migration
 
             // Metadata file yang penting
             $table->string('path'); // Path penyimpanan file
+<<<<<<< HEAD
+=======
+
+>>>>>>> main
             // Audit trail
             // $table->foreignId('uploaded_by')->constrained('users');
             $table->timestamps();

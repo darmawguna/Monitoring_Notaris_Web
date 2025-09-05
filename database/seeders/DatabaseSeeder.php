@@ -17,7 +17,11 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RoleSeeder::class,
             DeadlineConfigSeeder::class,
+<<<<<<< HEAD
             UserSeeder::class
+=======
+            UserSeeder::class, // Tambahkan UserSeeder di sini
+>>>>>>> main
         ]);
 
         // User::factory()->create([
