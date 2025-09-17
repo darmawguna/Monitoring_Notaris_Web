@@ -23,7 +23,8 @@ return new class extends Migration
             $table->text('persetujuan')->nullable();
 
             // Data finansial & status
-            $table->decimal('total_cost', 14, 2);
+            // TODO perbarui skema kwitansi apakah nantinya akan menggunakan field total_cost atau menggunakan nilai transaksi
+            $table->decimal('total_cost', 14, 2)->nullable();
             $table->decimal('total_paid', 14, 2)->default(0.00);
             $table->string('status_overall');
             $table->string('current_stage_key');
@@ -31,6 +32,7 @@ return new class extends Migration
             // Foreign keys & tracking
             $table->foreignId('current_assignee_id')->nullable()->constrained('users');
             $table->dateTime('deadline_at')->nullable();
+            // $table->foreignId('uploaded_by')->constrained('users');
             $table->foreignId('created_by')->constrained('users');
             $table->timestamps();
         });
