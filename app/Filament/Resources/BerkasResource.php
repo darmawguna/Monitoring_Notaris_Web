@@ -38,6 +38,10 @@ use Illuminate\Support\Str;
 use Filament\Infolists\Components\Actions\Action;
 use Filament\Infolists\Components\ViewEntry;
 use Illuminate\Database\Eloquent\Model;
+use Filament\Infolists\Components\Actions; // Namespace untuk ActionsColumn
+use Filament\Support\Enums\Alignment;
+// use Filament\Infolists\Components\Actions\Action;
+// use Filament\Infolists\Components\ImageEntry;
 
 class BerkasResource extends Resource
 {
@@ -46,6 +50,7 @@ class BerkasResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
     protected static ?string $navigationLabel = 'Berkas Jual Beli';
+    protected static ?string $navigationGroup = 'Berkas';
 
     public static function canViewAny(): bool
     {
@@ -217,10 +222,8 @@ class BerkasResource extends Resource
                                 if ($data['type'] === 'lainnya' && isset($data['type_lainnya'])) {
                                     $data['type'] = $data['type_lainnya'];
                                 }
-
                                 // Hapus data sementara yang tidak perlu disimpan
                                 unset($data['type_lainnya']);
-
                                 return $data;
                             }),
                     ]),
@@ -244,7 +247,6 @@ class BerkasResource extends Resource
                             ->required(),
                     ])
             ]);
-
     }
 
     public static function table(Table $table): Table
@@ -315,20 +317,39 @@ class BerkasResource extends Resource
     {
         return $infolist
             ->schema([
-                InfolistSection::make('Detail Berkas & Klien')
+                InfolistSection::make('Informasi Berkas')
                     ->schema([
-                        // Ganti semua TextEntry dengan satu ViewEntry
-                        ViewEntry::make('berkasDetails')
+                        ViewEntry::make('berkasInfo')
                             ->hiddenLabel()
-                            ->view('filament.infolists.sections.berkas-details-section'),
+                            ->view('filament.infolists.sections.berkas-info-section'),
                     ]),
 
-                InfolistSection::make('Status & Finansial')
+                InfolistSection::make('Data Pihak Jual Beli')
                     ->schema([
-                        // Ganti semua TextEntry dengan satu ViewEntry
-                        ViewEntry::make('statusFinancial')
+                        ViewEntry::make('jualBeliInfo')
                             ->hiddenLabel()
-                            ->view('filament.infolists.sections.status-financial-section'),
+                            ->view('filament.infolists.sections.jual-beli-section'),
+                    ]),
+
+                InfolistSection::make('Informasi Sertifikat')
+                    ->schema([
+                        ViewEntry::make('sertifikatInfo')
+                            ->hiddenLabel()
+                            ->view('filament.infolists.sections.sertifikat-section'),
+                    ]),
+
+                InfolistSection::make('Informasi PBB')
+                    ->schema([
+                        ViewEntry::make('pbbInfo')
+                            ->hiddenLabel()
+                            ->view('filament.infolists.sections.pbb-section'),
+                    ]),
+
+                InfolistSection::make('Informasi Bank')
+                    ->schema([
+                        ViewEntry::make('bankInfo')
+                            ->hiddenLabel()
+                            ->view('filament.infolists.sections.bank-section'),
                     ]),
                 InfolistSection::make('Lampiran Berkas')
                     ->schema([
@@ -338,34 +359,13 @@ class BerkasResource extends Resource
                                 TextEntry::make('type')
                                     ->label('Jenis Dokumen'),
 
-                                // --- INI BAGIAN YANG DIPERBARUI ---
+                                // --- INI BAGIAN YANG DIPERBARUI SECARA TOTAL ---
 
-                                // Komponen 1: Tampilkan ini HANYA JIKA file adalah gambar
+                                // Komponen 1: Tampilkan thumbnail gambar (tidak bisa diklik)
                                 ImageEntry::make('path')
                                     ->label('Pratinjau')
                                     ->disk('public')
                                     ->height(80)
-                                    // Membuat seluruh gambar bisa diklik untuk memicu Aksi
-                                    ->action(
-                                        Action::make('previewImage')
-                                            ->label('Lihat Ukuran Penuh')
-                                            ->modalHeading('Pratinjau Lampiran')
-                                            // Ganti ->infolist() dengan ->modalContent() untuk passing data manual
-                                            ->modalContent(
-                                                fn($record) =>
-                                                Infolist::make()
-                                                    ->record($record) // <-- Ini adalah bagian yang hilang
-                                                    ->schema([
-                                                        ImageEntry::make('path')
-                                                            ->hiddenLabel()
-                                                            ->disk('public')
-                                                            ->extraAttributes(['style' => 'display: block; max-width: 100%; height: auto; max-height: 75vh; margin: auto;']),
-                                                    ])
-                                            )
-                                            ->modalSubmitAction(false)
-                                            ->modalCancelAction(fn(\Filament\Actions\StaticAction $action) => $action->label('Tutup'))
-                                    )
-                                    // Logika visibilitas: hanya tampil jika file adalah gambar
                                     ->visible(function ($record): bool {
                                         if (!$record || !$record->path)
                                             return false;
@@ -384,7 +384,40 @@ class BerkasResource extends Resource
                                         return !Str::is(['*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp', '*.svg'], strtolower($record->path));
                                     }),
 
-                            ])->columns(2),
+                                // Komponen 3: Kolom Aksi Terpisah
+                                Actions::make([
+                                    // Aksi untuk membuka modal pratinjau
+                                    Action::make('preview')
+                                        ->label('Pratinjau')
+                                        ->icon('heroicon-o-eye')
+                                        ->modalContent(
+                                            fn($record) =>
+                                            Infolist::make()
+                                                ->record($record)
+                                                ->schema([
+                                                    ImageEntry::make('path')->hiddenLabel()->disk('public')->extraAttributes(['style' => 'display: block; max-width: 100%; height: auto; margin: auto;']),
+                                                ])
+                                        )
+                                        ->modalSubmitAction(false)
+                                        ->modalCancelAction(false) // Sembunyikan tombol default
+                                        ->visible(function ($record): bool {
+                                            if (!$record || !$record->path)
+                                                return false;
+                                            return Str::is(['*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp', '*.svg'], strtolower($record->path));
+                                        }),
+
+                                    // Aksi untuk mengunduh file
+                                    Action::make('download')
+                                        ->label('Unduh')
+                                        ->icon('heroicon-o-arrow-down-tray')
+                                        ->color('success')
+                                        ->url(fn($record) => route('berkas-files.download', ['berkasFile' => $record]), shouldOpenInNewTab: true)
+                                ])->label('Aksi')
+                                    ->alignment(Alignment::Center),
+
+
+
+                            ])->columns(3), // Ubah menjadi 3 kolom
                     ])->collapsible(),
 
                 InfolistSection::make('Riwayat & Durasi Pengerjaan')
