@@ -385,6 +385,7 @@ class BerkasResource extends Resource
                                     }),
 
                                 // Komponen 3: Kolom Aksi Terpisah
+                                // TODO perbarui alignmentnya agar berada pada posisi yang sesuai.
                                 Actions::make([
                                     // Aksi untuk membuka modal pratinjau
                                     Action::make('preview')
@@ -414,9 +415,6 @@ class BerkasResource extends Resource
                                         ->url(fn($record) => route('berkas-files.download', ['berkasFile' => $record]), shouldOpenInNewTab: true)
                                 ])->label('Aksi')
                                     ->alignment(Alignment::Center),
-
-
-
                             ])->columns(3), // Ubah menjadi 3 kolom
                     ])->collapsible(),
 

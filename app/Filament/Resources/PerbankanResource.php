@@ -68,6 +68,7 @@ class PerbankanResource extends Resource
                             ->disk('public')
                             ->directory('perbankan-attachments')
                             ->preserveFilenames(),
+                        // TODO ubah menjadi dropdown
                         Radio::make('jangka_waktu')
                             ->label('Jangka Waktu')
                             ->options([
