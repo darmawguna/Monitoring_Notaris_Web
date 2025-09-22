@@ -4,86 +4,64 @@ namespace App\Filament\Resources;
 
 use App\Enums\PembayaranStatus;
 use App\Filament\Resources\KwitansiResource\Pages;
+use App\Models\Berkas;
 use App\Models\Receipt;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
-use Filament\Notifications\Notification;
+use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Resources\Resource;
+use Filament\Support\RawJs;
 use Filament\Tables\Actions\Action;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Filament\Forms\Components\Repeater;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Get;
-use Filament\Forms\Set;
-use Filament\Support\RawJs;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 class KwitansiResource extends Resource
 {
     protected static ?string $model = Receipt::class;
-
     protected static ?string $navigationIcon = 'heroicon-o-receipt-percent';
     protected static ?string $modelLabel = 'Kwitansi';
     protected static ?string $pluralModelLabel = 'Audit Kwitansi';
     protected static ?string $navigationLabel = 'Kwitansi';
     protected static ?string $navigationGroup = 'Keuangan';
-
-    public static function canViewAny(): bool
-    {
-        return auth()->user()->role->name === 'Superadmin';
-    }
+    // ... (properti lain tetap sama)
 
     public static function form(Form $form): Form
     {
-        return $form->schema([]);
-    }
-
-    public static function table(Table $table): Table
-    {
-        return $table
-            ->headerActions([])
-            ->columns([
-                TextColumn::make('receipt_number')->label('Nomor Kwitansi'),
-                TextColumn::make('berkas.nama_pemohon')->label('Nama Pemohon'),
-                TextColumn::make('amount')->label('Jumlah')->money('IDR'),
-                BadgeColumn::make('status_pembayaran')->label('Status Pembayaran')
-                    ->colors([
-                        'success' => PembayaranStatus::LUNAS->value,
-                        'danger' => PembayaranStatus::BELUM_LUNAS->value,
-                    ]),
-            ])
-            ->actions([
-                // --- AKSI BARU UNTUK RINCIAN BIAYA ---
-                Action::make('lengkapiRincian')
-                    ->label('Lengkapi Rincian')
-                    ->icon('heroicon-o-pencil-square')
-                    // ->fillForm(function (Receipt $record): array {
-                    //     // 1. Ambil data rincian yang sudah ada
-                    //     $details = $record->detail_biaya ?? [];
-                    //     // 2. Hitung total dari data rincian tersebut
-                    //     $total = collect($details)->pluck('jumlah')->sum();
-                    //     // 3. Kembalikan array yang berisi data untuk kedua field
-                    //     return [
-                    //         'detail_biaya' => $details,
-                    //         'total_rincian' => $total,
-                    //     ];
-                    // })
-                    ->mountUsing(function (Form $form, Receipt $record): void {
-                        // 1. Ambil data rincian yang sudah ada dari record
-                        $details = $record->detail_biaya ?? [];
-
-                        // 2. Hitung total dari data rincian tersebut
-                        $total = collect($details)->pluck('jumlah')->sum();
-
-                        // 3. Isi seluruh form dengan data yang sudah disiapkan
-                        $form->fill([
-                            'detail_biaya' => $details,
-                            'total_rincian' => $total,
-                        ]);
-                    })
-                    ->form([
-                        // --- INI BAGIAN YANG DIPERBARUI ---
+        return $form
+            ->schema([
+                Section::make('Informasi Kwitansi')
+                    ->schema([
+                        TextInput::make('receipt_number')
+                            ->label('Nomor Kwitansi')
+                            ->placeholder('Akan digenerate otomatis')
+                            ->readOnly(),
+                        TextInput::make('nama_pemohon_kwitansi')
+                            ->label('Nama Pemohon')
+                            ->required(),
+                        // Opsi untuk menautkan ke berkas yang sudah ada
+                        Select::make('berkas_id')
+                            ->label('Tautkan ke Berkas (Opsional)')
+                            ->relationship('berkas', 'nama_berkas')
+                            ->searchable()
+                            ->preload(),
+                        Textarea::make('notes_kwitansi')
+                            ->label('Catatan Kwitansi')
+                            ->columnSpanFull()
+                            ->helperText("tambahkan catatan terkait kwitansi seperti : lunas/blm lunas"),
+                        Textarea::make('informasi_kwitansi')
+                            ->label('Informasi peruntukan Kwitansi')
+                            ->columnSpanFull(),
+                    ])->columns(2),
+                Section::make('Rincian Biaya')
+                    ->schema([
                         Repeater::make('detail_biaya')
                             ->label('Item Rincian Biaya')
                             ->schema([
@@ -94,47 +72,51 @@ class KwitansiResource extends Resource
                                     ->mask(RawJs::from('$money($input, \'.\')'))
                                     ->stripCharacters('.')
                                     ->dehydrateStateUsing(fn($state): string => preg_replace('/[^0-9]/', '', $state ?? '0'))
-                                    // 1. Buat input ini reaktif untuk memicu induknya
                                     ->live(debounce: 500),
-                                // Hapus afterStateUpdated dari sini
                             ])
                             ->columns(2)
                             ->addActionLabel('Tambah Rincian')
                             ->reorderable(false)
-                            // 2. Jadikan Repeater yang reaktif dan bertanggung jawab atas kalkulasi
                             ->reactive()
                             ->afterStateUpdated(function (Get $get, Set $set) {
                                 $details = $get('detail_biaya');
 
-                                // 1. Bersihkan setiap nilai 'jumlah' sebelum menjumlahkannya
                                 $total = collect($details)
                                     ->map(fn($item) => (int) preg_replace('/[^0-9]/', '', $item['jumlah'] ?? '0'))
                                     ->sum();
 
-                                // 2. Set total yang sudah bersih
-                                $set('total_rincian', $total);
+                                // SET DALAM FORMAT TAMPILAN (dengan pemisah ribuan)
+                                $set('amount', number_format($total, 0, ',', '.'));
                             }),
-                        // --- AKHIR DARI PERUBAHAN ---
 
-                        TextInput::make('total_rincian')
+                        TextInput::make('amount')
                             ->label('Total Rincian Biaya')
                             ->prefix('Rp')
                             ->readOnly()
-                            ->numeric()
-                            ->formatStateUsing(fn(?string $state): string => number_format($state ?? 0, 0, ',', '.'))
+                            // Saat menyimpan, ubah kembali ke angka murni
+                            ->dehydrateStateUsing(fn($state) => (int) preg_replace('/\D/', '', (string) $state))
+                            // Saat initial fill (edit), tampilkan terformat
+                            ->formatStateUsing(fn($state) => number_format((int) ($state ?? 0), 0, ',', '.'))
                             ->helperText('Nilai ini dihitung otomatis oleh sistem berdasarkan rincian di atas.'),
-                    ])
-                    ->action(function (Receipt $record, array $data): void {
-                        $totalRincian = collect($data['detail_biaya'])->pluck('jumlah')->sum();
-                        $record->update([
-                            'detail_biaya' => $data['detail_biaya'],
-                            'amount' => $totalRincian,
-                        ]);
-                        Notification::make()->title('Rincian biaya berhasil diperbarui')->success()->send();
-                    }),
+                    ]),
+            ]);
+    }
 
-
-                // Aksi download Anda yang sudah ada
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('receipt_number')->label('Nomor Kwitansi')->searchable(),
+                TextColumn::make('nama_pemohon_kwitansi')->label('Nama Pemohon')->searchable(),
+                TextColumn::make('amount')->label('Jumlah')->money('IDR'),
+                BadgeColumn::make('status_pembayaran')->label('Status Pembayaran')
+                    ->colors([
+                        'success' => PembayaranStatus::LUNAS->value,
+                        'danger' => PembayaranStatus::BELUM_LUNAS->value,
+                    ]),
+            ])
+            ->actions([
+                // (Kita akan menambahkan kembali aksi Edit/Lengkapi nanti jika diperlukan)
                 Action::make('download')
                     ->label('Download Kwitansi')
                     ->icon('heroicon-o-arrow-down-tray')
@@ -143,12 +125,12 @@ class KwitansiResource extends Resource
             ]);
     }
 
-
-
     public static function getPages(): array
     {
         return [
             'index' => Pages\ListKwitansis::route('/'),
+            'create' => Pages\CreateKwitansi::route('/create'),
+            'edit' => Pages\EditKwitansi::route('/{record}/edit'),
         ];
     }
 }

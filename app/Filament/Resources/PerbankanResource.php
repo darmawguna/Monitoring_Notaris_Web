@@ -17,6 +17,7 @@ use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Carbon;
+use Filament\Forms\Get;
 
 class PerbankanResource extends Resource
 {
@@ -61,6 +62,14 @@ class PerbankanResource extends Resource
                         TextInput::make('telepon')->label('Telepon')->tel(),
                     ])->columns(2),
 
+                // --- SECTION BARU UNTUK KREDITUR ---
+                Section::make('Informasi Kreditur')
+                    ->schema([
+                        TextInput::make('nama_kreditur')->label('Nama Kreditur'),
+                        TextInput::make('nomor_pk')->label('Nomor PK (Perjanjian Kredit)'),
+                    ])->columns(2),
+                // --- AKHIR DARI SECTION BARU ---
+
                 Section::make('Informasi Covernote / SKMHT')
                     ->schema([
                         FileUpload::make('berkas_bank')
@@ -69,14 +78,26 @@ class PerbankanResource extends Resource
                             ->directory('perbankan-attachments')
                             ->preserveFilenames(),
                         // TODO ubah menjadi dropdown
-                        Radio::make('jangka_waktu')
+                        Select::make('jangka_waktu')
                             ->label('Jangka Waktu')
+                            ->default(1)
                             ->options([
                                 1 => '1 Bulan',
                                 3 => '3 Bulan',
                                 6 => '6 Bulan',
+                                0 => 'Lainnya (dalam bulan)',
                             ])
-                            ->required(),
+                            ->required()
+                            ->reactive(), // Buat dropdown ini reaktif
+
+                        // Input teks tambahan untuk "Lainnya"
+                        TextInput::make('jangka_waktu_lainnya')
+                            ->label('Sebutkan Jangka Waktu (Bulan)')
+                            ->numeric()
+                            ->suffix('Bulan')
+                            // Hanya muncul jika 'jangka_waktu' adalah 0
+                            ->visible(fn(Get $get): bool => $get('jangka_waktu') == 0)
+                            ->required(fn(Get $get): bool => $get('jangka_waktu') == 0),
                         DatePicker::make('tanggal_covernote')
                             ->label('Tanggal Awal Covernote')
                             ->required()

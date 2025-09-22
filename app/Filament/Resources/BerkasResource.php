@@ -40,6 +40,7 @@ use Filament\Infolists\Components\ViewEntry;
 use Illuminate\Database\Eloquent\Model;
 use Filament\Infolists\Components\Actions; // Namespace untuk ActionsColumn
 use Filament\Support\Enums\Alignment;
+use Filament\Tables\Actions\ViewAction;
 // use Filament\Infolists\Components\Actions\Action;
 // use Filament\Infolists\Components\ImageEntry;
 
@@ -49,13 +50,20 @@ class BerkasResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
-    protected static ?string $navigationLabel = 'Berkas Jual Beli';
+    protected static ?string $navigationLabel = 'Berkas Peralihan Hak';
     protected static ?string $navigationGroup = 'Berkas';
 
     public static function canViewAny(): bool
     {
-        $userRole = auth()->user()->role->name;
-        return in_array($userRole, ['Superadmin', 'FrontOffice']);
+        $user = auth()->user();
+        $userRole = $user->role->name;
+
+        // 1. Superadmin dan Front Office selalu bisa melihat.
+        if (in_array($userRole, ['Superadmin', 'FrontOffice'])) {
+            return true;
+        }
+
+        return false;
     }
 
     public static function getEloquentQuery(): Builder
@@ -98,32 +106,71 @@ class BerkasResource extends Resource
                             ->placeholder('Akan digenerate otomatis setelah disimpan')
                             ->readOnly(),
                         // ->required(),
-                        TextInput::make('nama_berkas')
+                        Select::make('nama_berkas')
+                            ->label('Jenis Berkas')
+                            ->options([
+                                'jual_beli' => 'Jual Beli',
+                                'hibah' => 'Hibah',
+                                'tukar_menukar' => 'Tukar Menukar',
+                                'aphb' => 'APHB',
+                            ])
                             ->required()
-                            ->maxLength(255),
+                            ->reactive(), // Penting untuk form dinamis
+                        // Setelah user memilih, otomatis isi nama pemohon
+                        // ->afterStateUpdated(fn(Set $set, ?string $state) => $set('nama_pemohon', null)),
                         TextInput::make('nama_pemohon')
                             ->required()
                             ->maxLength(255),
+                        TextInput::make('pbb_sppt')->label('SPPT'),
+                        TextInput::make('pbb_nop')->label('NOP'),
                     ])->columns(3),
 
                 // SECTION BERKAS JUAL BELI
-                Section::make('Data Pihak Jual Beli')
+                Section::make(function (Get $get): string {
+                    $jenisBerkas = $get('nama_berkas');
+                    return match ($jenisBerkas) {
+                        'hibah' => 'Data Pihak Hibah',
+                        'tukar_menukar' => 'Data Pihak Tukar Menukar',
+                        'aphb' => 'Data Pihak APHB',
+                        default => 'Data Pihak Jual Beli',
+                    };
+                })
                     ->schema([
                         Grid::make(3)->schema([
-                            Section::make('Data Penjual')
+                            // PIHAK PERTAMA (LABEL DINAMIS)
+                            Section::make(function (Get $get): string {
+                                $jenisBerkas = $get('nama_berkas');
+                                return match ($jenisBerkas) {
+                                    'hibah' => 'Data Pemberi Hibah',
+                                    'tukar_menukar' => 'Data Pihak A',
+                                    'aphb' => 'Data Pihak A',
+                                    default => 'Data Penjual',
+                                };
+                            })
                                 ->schema([
                                     TextInput::make('penjual_data.nama')->label('Nama'),
                                     TextInput::make('penjual_data.nik')->label('Identitas / NIK'),
                                     TextInput::make('penjual_data.telp')->label('No. Telp'),
                                     Textarea::make('penjual_data.alamat')->label('Alamat'),
                                 ]),
-                            Section::make('Data Pembeli')
+
+                            // PIHAK KEDUA (LABEL DINAMIS)
+                            Section::make(function (Get $get): string {
+                                $jenisBerkas = $get('nama_berkas');
+                                return match ($jenisBerkas) {
+                                    'hibah' => 'Data Penerima Hibah',
+                                    'tukar_menukar' => 'Data Pihak B',
+                                    'aphb' => 'Data Pihak B',
+                                    default => 'Data Pembeli',
+                                };
+                            })
                                 ->schema([
                                     TextInput::make('pembeli_data.nama')->label('Nama'),
                                     TextInput::make('pembeli_data.nik')->label('Identitas / NIK'),
                                     TextInput::make('pembeli_data.telp')->label('No. Telp'),
                                     Textarea::make('pembeli_data.alamat')->label('Alamat'),
                                 ]),
+
                             Section::make('Data Pihak Persetujuan')
                                 ->schema([
                                     TextInput::make('pihak_persetujuan_data.nama')->label('Nama'),
@@ -133,6 +180,7 @@ class BerkasResource extends Resource
                                 ]),
                         ])
                     ]),
+
 
                 // SECTION SERTIFIKAT
                 Section::make('Informasi Sertifikat')
@@ -164,22 +212,16 @@ class BerkasResource extends Resource
                     ])->columns(2),
 
                 // SECTION PBB
-                Section::make('Informasi PBB')
+                Section::make('Informasi Akta')
                     ->schema([
-                        TextInput::make('pbb_sppt')->label('SPPT'),
-                        TextInput::make('pbb_nop')->label('NOP'),
                         TextInput::make('pbb_validasi')->label('Validasi PBB'),
-                        TextInput::make('pbb_akta_bpjb')->label('Akta BPJB'),
+                        TextInput::make('pbb_akta_bpjb')->label('Akta PPJB'),
                         TextInput::make('pbb_nomor')->label('Nomor PBB'),
                     ])->columns(3),
 
-                // SECTION BANK
-                Section::make('Informasi Bank')
-                    ->schema([
-                        TextInput::make('bank_kredit')->label('Bank / Kredit Bank'),
-                    ]),
 
-                Section::make('Pendaftaran Sertifikat (Upload Dokumen)')
+
+                Section::make('Upload Dokumen')
                     ->schema([
                         Repeater::make('files')
                             ->relationship()
@@ -300,6 +342,10 @@ class BerkasResource extends Resource
 
                 // --- AKHIR DARI PERUBAHAN ---
             ])
+            ->actions([
+                ViewAction::make()->url(fn($record) => self::getUrl('view', ['record' => $record])),
+                // ViewAction::make()->url(fn(Berkas $record) => BerkasResource::getUrl('view', ['record' => $record])),
+            ])
 
             ->filters([
                 SelectFilter::make('current_stage_key')
@@ -345,12 +391,7 @@ class BerkasResource extends Resource
                             ->view('filament.infolists.sections.pbb-section'),
                     ]),
 
-                InfolistSection::make('Informasi Bank')
-                    ->schema([
-                        ViewEntry::make('bankInfo')
-                            ->hiddenLabel()
-                            ->view('filament.infolists.sections.bank-section'),
-                    ]),
+               
                 InfolistSection::make('Lampiran Berkas')
                     ->schema([
                         RepeatableEntry::make('files')

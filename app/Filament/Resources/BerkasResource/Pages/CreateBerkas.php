@@ -42,6 +42,8 @@ class CreateBerkas extends CreateRecord
         $data['created_by'] = auth()->id();
         $data['status_overall'] = BerkasStatus::PROGRES;
         $data['current_stage_key'] = StageKey::PETUGAS_2;
+
+        
         return $data;
     }
 
@@ -72,19 +74,6 @@ class CreateBerkas extends CreateRecord
             'started_at' => $startedAt,
             'deadline' => $deadline, // Simpan deadline yang sudah dihitung
         ]);
-
-        // TODO buat agar kwitansi dapat diedit untuk menambahkan detail pemakaian dana
-        // Buat Kwitansi
-        $berkas->receipt()->create([
-            'receipt_number' => 'KW-' . $berkas->nomor_berkas,
-            'amount' => 0, // Ambil total biaya dari form
-            'issued_at' => now(),
-            'issued_by' => auth()->id(),
-            'payment_method' => 'pending',
-            'status_pembayaran' => 'belum_lunas',
-            'detail_biaya' => null, // Pastikan rincian biaya dibuat kosong
-        ]);
-        $berkas->update(['total_paid' => 0]);
 
         // Kirim notifikasi ke Petugas 2
         $petugas2 = User::find($berkas->current_assignee_id);

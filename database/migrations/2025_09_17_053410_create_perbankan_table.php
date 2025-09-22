@@ -23,6 +23,8 @@ return new class extends Migration {
             $table->string('npwp')->nullable();
             $table->string('email')->nullable();
             $table->string('telepon')->nullable();
+            $table->string('nomor_pk')->nullable();
+            $table->string('nama_kreditur')->nullable();
 
             // Section Covernote / SKMHT
             $table->string('berkas_bank')->nullable(); // Path untuk file upload

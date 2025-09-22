@@ -41,7 +41,6 @@ return new class extends Migration {
             $table->string('pbb_nomor')->after('pbb_akta_bpjb')->nullable();
 
             // Tambahkan kolom untuk Section Bank
-            $table->string('bank_kredit')->after('pbb_nomor')->nullable();
         });
     }
 

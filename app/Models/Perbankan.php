@@ -18,6 +18,8 @@ class Perbankan extends Model
         'ttl_tanggal',
         'npwp',
         'email',
+        'nomor_pk', // <-- Tambahkan ini
+        'nama_kreditur',
         'telepon',
         'berkas_bank',
         'jangka_waktu',

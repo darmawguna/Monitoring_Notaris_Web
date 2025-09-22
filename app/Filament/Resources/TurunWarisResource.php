@@ -21,9 +21,9 @@ class TurunWarisResource extends Resource
 
     // --- Konfigurasi Tampilan & Navigasi ---
     protected static ?string $navigationIcon = 'heroicon-o-users';
-    protected static ?string $modelLabel = 'Berkas Turun Waris';
-    protected static ?string $pluralModelLabel = 'Berkas Turun Waris';
-    protected static ?string $navigationLabel = 'Berkas Turun Waris';
+    protected static ?string $modelLabel = 'Berkas Diluar Peralihan Hak';
+    protected static ?string $pluralModelLabel = 'Berkas Diluar Peralihan Hak';
+    protected static ?string $navigationLabel = 'Berkas Diluar Peralihan Hak';
     protected static ?string $navigationGroup = 'Berkas'; // Grupkan bersama "Berkas Jual Beli"
 
     public static function form(Form $form): Form

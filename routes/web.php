@@ -15,3 +15,12 @@ Route::get('/berkas-files/{berkasFile}/download', [BerkasFileController::class, 
 Route::get('/kwitansi/{receipt}/download', [KwitansiController::class, 'download'])
     ->name('kwitansi.download')
     ->middleware('auth');
+
+
+use App\Http\Controllers\ClientTrackingController;
+// ... (use statements lain)
+
+// ... (rute lain yang sudah ada)
+
+// Rute untuk Halaman Pelacakan Klien
+Route::get('/lacak', [ClientTrackingController::class, 'index'])->name('client.tracking');

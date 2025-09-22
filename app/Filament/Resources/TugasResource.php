@@ -36,8 +36,8 @@ class TugasResource extends Resource
     {
         return parent::getEloquentQuery()
             ->where('current_assignee_id', auth()->id())
-            // Tambahkan with() untuk memuat relasi yang dibutuhkan di tabel.
-            ->with(['currentAssignee']);
+            // preload relasi untuk halaman view agar cepat
+            ->with(['currentAssignee', 'files', 'progress']);
     }
     public static function canViewAny(): bool
     {
@@ -54,27 +54,38 @@ class TugasResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('No.')
-                    ->rowIndex()
-                    ->formatStateUsing(function (HasTable $livewire, string $state): string {
-                        $currentPage = $livewire->getTable()->getRecords()->currentPage();
-                        $perPage = $livewire->getTable()->getRecords()->perPage();
-                        return (string) (($currentPage - 1) * $perPage + (int) $state + 1);
-                    }),
-                TextColumn::make('nomor')
-                    ->label('Nomor Berkas')
-                    ->searchable(),
+                // --- INI BAGIAN YANG DIPERBARUI ---
+                // 1. Ganti 'nomor' menjadi 'nomor_berkas'
+                TextColumn::make('nomor_berkas')->label('Nomor Berkas')->searchable()
+                    ->url(fn($record) => self::getUrl('view', ['record' => $record])),
+
                 TextColumn::make('nama_berkas')
                     ->searchable(),
-                TextColumn::make('penjual'),
+
+                // 2. Ganti 'penjual' dengan 'nama_pemohon' yang lebih relevan
+                TextColumn::make('nama_pemohon')
+                    ->label('Nama Pemohon')
+                    ->searchable(),
+
                 BadgeColumn::make('current_stage_key')
                     ->label('Tahap Saat Ini'),
-                TextColumn::make('deadline_at')
+
+                // 3. Ambil deadline dari catatan 'progress' yang relevan, bukan dari 'berkas'
+                TextColumn::make('progress.deadline')
                     ->label('Deadline')
+                    ->state(function (Berkas $record): ?string {
+                        // Ambil deadline dari progress terakhir yang 'pending'
+                        $latestProgress = $record->progress()->where('status', 'pending')->latest()->first();
+                        return $latestProgress?->deadline;
+                    })
                     ->date('d M Y'),
+
+                // --- AKHIR DARI PERUBAHAN ---
             ])
+
             ->filters([])
             ->actions([
+                ViewAction::make()->url(fn($record) => self::getUrl('view', ['record' => $record])),
                 // ViewAction::make()->url(fn(Berkas $record) => BerkasResource::getUrl('view', ['record' => $record])),
                 Action::make('process')
                     ->label('Proses Berkas')
@@ -177,11 +188,15 @@ class TugasResource extends Resource
             ])
             ->bulkActions([]);
     }
+    
+
+    
 
     public static function getPages(): array
     {
         return [
             'index' => Pages\ListTugas::route('/'),
+            'view' => Pages\ViewTugas::route('/{record}'),
         ];
     }
 }

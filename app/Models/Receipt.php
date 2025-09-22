@@ -14,12 +14,14 @@ class Receipt extends Model
     protected $fillable = [
         'berkas_id',
         'receipt_number',
+        'nama_pemohon_kwitansi', // <-- Tambahkan ini
         'amount',
-        'status_pembayaran', // Tambahkan ini
+        'status_pembayaran',
+        'detail_biaya',
+        'notes_kwitansi', // <-- Tambahkan ini
         'payment_method',
-        'detail_biaya', // Tambahkan ini
         'issued_at',
-        'notes',
+        'informasi_kwitansi', // 'notes' lama bisa dihapus jika 'notes_kwitansi' adalah penggantinya
         'issued_by',
     ];
 

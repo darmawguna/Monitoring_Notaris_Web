@@ -39,7 +39,11 @@ class TandaTerimaSertifikatResource extends Resource
                             ->required()
                             ->maxLength(255),
                         DatePicker::make('tanggal_terima')
-                            ->label('Tanggal')
+                            ->label('Tanggal Terima')
+                            ->required()
+                            ->default(now()),
+                        DatePicker::make('tanggal_menyerahkan')
+                            ->label('Tanggal Menyerahkan')
                             ->required()
                             ->default(now()),
                         TextInput::make('sertifikat_info')

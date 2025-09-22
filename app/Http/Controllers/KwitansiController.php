@@ -3,92 +3,130 @@
 namespace App\Http\Controllers;
 
 use App\Models\Receipt;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use PhpOffice\PhpWord\TemplateProcessor;
 
 class KwitansiController extends Controller
 {
     public function download(Receipt $receipt)
     {
-        
-        // 1. Pastikan path ke folder 'templates' (dengan 's') sudah benar.
+        // (Opsional) otorisasi jika pakai policy
+        // $this->authorize('view', $receipt);
+
         $templatePath = storage_path('app/template/template_kwitansi.docx');
         if (!file_exists($templatePath)) {
             abort(404, 'Template kwitansi tidak ditemukan.');
         }
 
-        $templateProcessor = new TemplateProcessor($templatePath);
+        $doc = new TemplateProcessor($templatePath);
 
-        $berkas = $receipt->berkas;
+        // ---------- Nilai umum (terisi di dua halaman sekaligus) ----------
+        $doc->setValue('nama_pemohon', $receipt->nama_pemohon_kwitansi ?? 'N/A');
+        $doc->setValue('nomor_kwitansi', $receipt->receipt_number ?? 'N/A');
+        $doc->setValue('notes_kwitansi', $receipt->notes_kwitansi ?? '');
 
-        // 2. Isi semua placeholder data tunggal
-        $templateProcessor->setValue('nama_pemohon', $berkas->nama_pemohon ?? 'N/A');
-        $templateProcessor->setValue('jumlah', number_format((float) $receipt->amount, 0, ',', '.'));
-        $templateProcessor->setValue('terbilang', $this->terbilang((float) $receipt->amount) . ' Rupiah');
-        $templateProcessor->setValue('info_sertifikat', "Proses Jual Beli atas SHM No. {$berkas->sertifikat_nomor} seluas {$berkas->sertifikat_luas} m2");
-        $templateProcessor->setValue('tanggal_kwitansi', \Carbon\Carbon::parse($receipt->issued_at)->translatedFormat('d F Y'));
+        $tanggal = $receipt->issued_at
+            ? Carbon::parse($receipt->issued_at)->translatedFormat('d F Y')
+            : now()->translatedFormat('d F Y');
+        $doc->setValue('tanggal_kwitansi', $tanggal);
 
-        // 3. Logika untuk mengisi rincian biaya yang dinamis
-        $rincian = $receipt->detail_biaya ?? [];
+        // Jika kamu punya info_sertifikat/informasi_kwitansi di DB:
+        // if (property_exists($receipt, 'informasi_kwitansi')) {
+        //     $doc->setValue('info_sertifikat', (string) $receipt->informasi_kwitansi);
+        // }
+        $doc->setValue('info_sertifikat', (string) $receipt->informasi_kwitansi);
 
-        if (count($rincian) > 0) {
-            // Gunakan nama blok 'rincian' yang benar, sesuai dengan ${rincian_start}
-            $templateProcessor->cloneBlock('rincian', count($rincian), true, true);
+        // ---------- Siapkan rincian ----------
+        $rawItems = $receipt->detail_biaya ?? [];
+        // Normalisasi & bersihkan angka
+        $items = array_map(function ($it) {
+            $desc = (string) ($it['deskripsi'] ?? '');
+            $amt = (int) preg_replace('/\D/', '', (string) ($it['jumlah'] ?? 0));
+            return ['deskripsi' => $desc, 'jumlah' => $amt];
+        }, is_array($rawItems) ? $rawItems : $rawItems->toArray());
 
-            // Isi setiap blok yang sudah disalin
-            foreach ($rincian as $index => $item) {
-                $templateProcessor->setValue('deskripsi_item#' . ($index + 1), $item['deskripsi'] ?? '');
-                // Format jumlah item dengan pemisah ribuan
-                $templateProcessor->setValue('jumlah_item#' . ($index + 1), number_format($item['jumlah'] ?? 0, 0, ',', '.'));
+        $totalItems = array_sum(array_column($items, 'jumlah'));
+        $grandTotal = count($items) ? $totalItems : (int) ($receipt->amount ?? 0);
+
+        // ---------- Set total & terbilang (dipakai di semua tempat ${jumlah}, ${terbilang}) ----------
+        $doc->setValue('jumlah', number_format($grandTotal, 0, ',', '.'));
+        $doc->setValue('terbilang', $this->terbilang($grandTotal) . ' Rupiah');
+
+        // ---------- Clone ROW untuk HALAMAN 1 ----------
+        if (count($items)) {
+            // Pastikan ${deskripsi_item_1} & ${jumlah_item_1} berada di SATU baris tabel
+            $doc->cloneRow('deskripsi_item-1', count($items));
+            foreach ($items as $i => $it) {
+                $n = $i + 1;
+                $doc->setValue("deskripsi_item-1#{$n}", $it['deskripsi']);
+                $doc->setValue("jumlah_item-1#{$n}", number_format($it['jumlah'], 0, ',', '.'));
             }
         } else {
-            // Jika tidak ada rincian, hapus placeholder blok agar tidak muncul
-            $templateProcessor->deleteBlock('rincian');
+            // Jika tidak ada rincian, isi placeholder agar tidak kosong/invalid
+            $doc->setValue('deskripsi-item-1', '-');
+            $doc->setValue('jumlah_item-1', '0');
         }
 
-        // dd($templateProcessor->getVariables());
-
-        // 4. Proses penyimpanan dan pengiriman file (sudah benar)
-        $fileName = 'Kwitansi - ' . ($berkas->nama_pemohon ?? 'Tanpa Nama') . '.docx';
-        $tempDirectory = storage_path('app/temp/');
-        $tempFile = $tempDirectory . $fileName;
-
-        if (!File::isDirectory($tempDirectory)) {
-            File::makeDirectory($tempDirectory, 0755, true, true);
+        // ---------- Clone ROW untuk HALAMAN 2 ----------
+        if (count($items)) {
+            // Pastikan ${deskripsi_item_2} & ${jumlah_item_2} berada di SATU baris tabel
+            $doc->cloneRow('deskripsi_item-2', count($items));
+            foreach ($items as $i => $it) {
+                $n = $i + 1;
+                $doc->setValue("deskripsi_item-2#{$n}", $it['deskripsi']);
+                $doc->setValue("jumlah_item-2#{$n}", number_format($it['jumlah'], 0, ',', '.'));
+            }
+        } else {
+            $doc->setValue('deskripsi_item-2', '-');
+            $doc->setValue('jumlah_item-2', '0');
         }
 
-        $templateProcessor->saveAs($tempFile);
+        // ---------- Simpan & kirim ----------
+        $displayName = $receipt->nama_pemohon_kwitansi ?: 'Tanpa Nama';
+        $fileName = 'Kwitansi - ' . Str::slug($displayName) . '.docx';
 
-        return response()->download($tempFile)->deleteFileAfterSend(true);
+        $tempDir = storage_path('app/temp/');
+        if (!File::isDirectory($tempDir)) {
+            File::makeDirectory($tempDir, 0755, true);
+        }
+        $tempPath = $tempDir . $fileName;
+
+        $doc->saveAs($tempPath);
+
+        return response()->download($tempPath, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ])->deleteFileAfterSend(true);
     }
 
-    /**
-     * Fungsi helper untuk mengubah angka menjadi tulisan.
-     * @param float|int $angka
-     * @return string
-     */
     private function terbilang($angka): string
     {
-        $angka = abs($angka);
+        $angka = (int) abs($angka);
         $huruf = ["", "satu", "dua", "tiga", "empat", "lima", "enam", "tujuh", "delapan", "sembilan", "sepuluh", "sebelas"];
         $temp = "";
+
         if ($angka < 12) {
             $temp = " " . $huruf[$angka];
-        } else if ($angka < 20) {
-            $temp = $this->terbilang($angka - 10) . " Belas";
-        } else if ($angka < 100) {
-            $temp = $this->terbilang($angka / 10) . " Puluh" . $this->terbilang($angka % 10);
-        } else if ($angka < 200) {
+        } elseif ($angka < 20) {
+            $temp = $this->terbilang($angka - 10) . " belas";
+        } elseif ($angka < 100) {
+            $temp = $this->terbilang(intval($angka / 10)) . " puluh" . $this->terbilang($angka % 10);
+        } elseif ($angka < 200) {
             $temp = " seratus" . $this->terbilang($angka - 100);
-        } else if ($angka < 1000) {
-            $temp = $this->terbilang($angka / 100) . " Ratus" . $this->terbilang($angka % 100);
-        } else if ($angka < 2000) {
+        } elseif ($angka < 1000) {
+            $temp = $this->terbilang(intval($angka / 100)) . " ratus" . $this->terbilang($angka % 100);
+        } elseif ($angka < 2000) {
             $temp = " seribu" . $this->terbilang($angka - 1000);
-        } else if ($angka < 1000000) {
-            $temp = $this->terbilang($angka / 1000) . " Ribu" . $this->terbilang($angka % 1000);
-        } else if ($angka < 1000000000) {
-            $temp = $this->terbilang($angka / 1000000) . " Juta" . $this->terbilang($angka % 1000000);
+        } elseif ($angka < 1000000) {
+            $temp = $this->terbilang(intval($angka / 1000)) . " ribu" . $this->terbilang($angka % 1000);
+        } elseif ($angka < 1000000000) {
+            $temp = $this->terbilang(intval($angka / 1000000)) . " juta" . $this->terbilang($angka % 1000000);
+        } else {
+            // Opsional: lanjutkan untuk miliar/triliun jika diperlukan
+            $temp = $this->terbilang(intval($angka / 1000000000)) . " miliar" . $this->terbilang($angka % 1000000000);
         }
+
         return ucwords(trim($temp));
     }
 }

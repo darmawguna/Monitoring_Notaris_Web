@@ -34,7 +34,6 @@ class Berkas extends Model
         'pbb_validasi',
         'pbb_akta_bpjb',
         'pbb_nomor',
-        'bank_kredit',
         'total_cost',
         'total_paid',
         'status_overall',
