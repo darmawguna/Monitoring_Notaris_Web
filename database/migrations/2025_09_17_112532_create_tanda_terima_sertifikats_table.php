@@ -4,8 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
+return new class extends Migration {
     /**
      * Run the migrations.
      */
@@ -13,6 +12,12 @@ return new class extends Migration
     {
         Schema::create('tanda_terima_sertifikats', function (Blueprint $table) {
             $table->id();
+            $table->string('penyerah'); // Yang menyerahkan sertifikat
+            $table->string('penerima'); // Yang menerima sertifikat
+            $table->date('tanggal_terima');
+            $table->string('sertifikat_info'); // Info sertifikat hak milik
+            $table->string('dokumen_akhir_path')->nullable(); // Path untuk file upload
+            $table->foreignId('created_by')->constrained('users');
             $table->timestamps();
         });
     }

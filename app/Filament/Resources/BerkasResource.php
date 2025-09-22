@@ -159,7 +159,8 @@ class BerkasResource extends Resource
                             ->prefix('Rp')
                             ->mask(RawJs::from('$money($input, \',\')'))
                             ->stripCharacters(',')
-                            ->dehydrateStateUsing(fn($state): ?string => $state ? preg_replace('/[^0-9]/', '', $state) : null),
+                            ->dehydrateStateUsing(fn($state): ?string => $state ? preg_replace('/[^0-9]/', '', $state) : null)
+                            ->helperText('Masukkan total estimasi biaya awal.'),
                     ])->columns(2),
 
                 // SECTION PBB
@@ -173,7 +174,6 @@ class BerkasResource extends Resource
                     ])->columns(3),
 
                 // SECTION BANK
-                // TODO Perbarui lagi sesuai dengan revisian yang ada
                 Section::make('Informasi Bank')
                     ->schema([
                         TextInput::make('bank_kredit')->label('Bank / Kredit Bank'),

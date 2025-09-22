@@ -73,13 +73,16 @@ class CreateBerkas extends CreateRecord
             'deadline' => $deadline, // Simpan deadline yang sudah dihitung
         ]);
 
+        // TODO buat agar kwitansi dapat diedit untuk menambahkan detail pemakaian dana
         // Buat Kwitansi
         $berkas->receipt()->create([
-            'receipt_number' => 'KW-' . $berkas->nomor,
-            'amount' => $berkas->nilai_transaksi,
+            'receipt_number' => 'KW-' . $berkas->nomor_berkas,
+            'amount' => 0, // Ambil total biaya dari form
             'issued_at' => now(),
             'issued_by' => auth()->id(),
             'payment_method' => 'pending',
+            'status_pembayaran' => 'belum_lunas',
+            'detail_biaya' => null, // Pastikan rincian biaya dibuat kosong
         ]);
         $berkas->update(['total_paid' => 0]);
 

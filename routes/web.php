@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\BerkasFileController;
+use App\Http\Controllers\KwitansiController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -9,4 +10,8 @@ Route::get('/', function () {
 
 Route::get('/berkas-files/{berkasFile}/download', [BerkasFileController::class, 'download'])
     ->name('berkas-files.download')
+    ->middleware('auth');
+
+Route::get('/kwitansi/{receipt}/download', [KwitansiController::class, 'download'])
+    ->name('kwitansi.download')
     ->middleware('auth');
