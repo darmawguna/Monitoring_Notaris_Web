@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\PembayaranStatus; // Impor Enum
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,36 +14,27 @@ class Receipt extends Model
     protected $fillable = [
         'berkas_id',
         'receipt_number',
+        'nama_pemohon_kwitansi', // <-- Tambahkan ini
         'amount',
+        'status_pembayaran',
+        'detail_biaya',
+        'notes_kwitansi', // <-- Tambahkan ini
         'payment_method',
         'issued_at',
-        'notes',
+        'informasi_kwitansi', // 'notes' lama bisa dihapus jika 'notes_kwitansi' adalah penggantinya
         'issued_by',
     ];
 
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array<string, string>
-     */
     protected $casts = [
         'amount' => 'decimal:2',
+        'detail_biaya' => 'array',
         'issued_at' => 'date',
+        'status_pembayaran' => PembayaranStatus::class, // Cast ke Enum
     ];
 
-    /**
-     * Get the berkas that owns the receipt.
-     */
     public function berkas(): BelongsTo
     {
         return $this->belongsTo(Berkas::class);
     }
-
-    /**
-     * Get the user who issued the receipt.
-     */
-    public function issuedBy(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'issued_by');
-    }
+    // ... relasi lain
 }

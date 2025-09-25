@@ -21,7 +21,9 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 use App\Filament\Widgets\StatsOverview;
 use App\Filament\Widgets\BerkasTerbaru;
 use App\Filament\Widgets\KwitansiTerbaru;
+use Filament\Support\Facades\FilamentView;
 
+// TODO lakukan stress test untuk mengukur kekuatan dari sistem
 class AdminPanelProvider extends PanelProvider
 {
     public function panel(Panel $panel): Panel
@@ -50,6 +52,7 @@ class AdminPanelProvider extends PanelProvider
                 BerkasTerbaru::class,
                 KwitansiTerbaru::class,
             ])
+            ->renderHook('panels::topbar.start', fn() => view('filament.partials.navbar-title'))
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,

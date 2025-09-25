@@ -14,13 +14,26 @@ class Berkas extends Model
 {
     use HasFactory;
 
+    /**
+     * The attributes that are mass assignable.
+     */
     protected $fillable = [
-        'nomor',
+        'nomor_berkas',
         'nama_berkas',
-        'penjual',
-        'pembeli',
-        'sertifikat_nama',
-        'persetujuan',
+        'nama_pemohon',
+        'penjual_data',
+        'pembeli_data',
+        'pihak_persetujuan_data',
+        'sertifikat_nomor',
+        'sertifikat_luas',
+        'sertifikat_jenis',
+        'sertifikat_tipe',
+        'nilai_transaksi',
+        'pbb_sppt',
+        'pbb_nop',
+        'pbb_validasi',
+        'pbb_akta_bpjb',
+        'pbb_nomor',
         'total_cost',
         'total_paid',
         'status_overall',
@@ -30,12 +43,20 @@ class Berkas extends Model
         'created_by',
     ];
 
+    /**
+     * The attributes that should be cast.
+     */
     protected $casts = [
         'total_cost' => 'decimal:2',
         'total_paid' => 'decimal:2',
+        'nilai_transaksi' => 'decimal:2',
         'deadline_at' => 'datetime',
         'status_overall' => BerkasStatus::class,
         'current_stage_key' => StageKey::class,
+        // Beritahu Laravel bahwa kolom-kolom ini adalah JSON
+        'penjual_data' => 'array',
+        'pembeli_data' => 'array',
+        'pihak_persetujuan_data' => 'array',
     ];
 
     public function createdBy(): BelongsTo

@@ -30,11 +30,19 @@ use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Illuminate\Support\Carbon;
+use Filament\Forms\Components\Grid;
+use Filament\Forms\Get;
+use Filament\Forms\Components\Radio;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Filament\Infolists\Components\Actions\Action;
 use Filament\Infolists\Components\ViewEntry;
 use Illuminate\Database\Eloquent\Model;
+use Filament\Infolists\Components\Actions; // Namespace untuk ActionsColumn
+use Filament\Support\Enums\Alignment;
+use Filament\Tables\Actions\ViewAction;
+// use Filament\Infolists\Components\Actions\Action;
+// use Filament\Infolists\Components\ImageEntry;
 
 class BerkasResource extends Resource
 {
@@ -42,10 +50,20 @@ class BerkasResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
+    protected static ?string $navigationLabel = 'Berkas Peralihan Hak';
+    protected static ?string $navigationGroup = 'Berkas';
+
     public static function canViewAny(): bool
     {
-        $userRole = auth()->user()->role->name;
-        return in_array($userRole, ['Superadmin', 'FrontOffice']);
+        $user = auth()->user();
+        $userRole = $user->role->name;
+
+        // 1. Superadmin dan Front Office selalu bisa melihat.
+        if (in_array($userRole, ['Superadmin', 'FrontOffice'])) {
+            return true;
+        }
+
+        return false;
     }
 
     public static function getEloquentQuery(): Builder
@@ -79,40 +97,131 @@ class BerkasResource extends Resource
     {
         return $form
             ->schema([
-                Section::make('Detail Klien & Penugasan')
+                // SECTION BERKAS
+                Section::make('Informasi Berkas')
                     ->schema([
-                        TextInput::make('nama_berkas')
+                        TextInput::make('nomor_berkas')
+                            ->label('Nomor Berkas')
+                            // Hapus ->default(...)
+                            ->placeholder('Akan digenerate otomatis setelah disimpan')
+                            ->readOnly(),
+                        // ->required(),
+                        Select::make('nama_berkas')
+                            ->label('Jenis Berkas')
+                            ->options([
+                                'jual_beli' => 'Jual Beli',
+                                'hibah' => 'Hibah',
+                                'tukar_menukar' => 'Tukar Menukar',
+                                'aphb' => 'APHB',
+                            ])
+                            ->required()
+                            ->reactive(), // Penting untuk form dinamis
+                        // Setelah user memilih, otomatis isi nama pemohon
+                        // ->afterStateUpdated(fn(Set $set, ?string $state) => $set('nama_pemohon', null)),
+                        TextInput::make('nama_pemohon')
                             ->required()
                             ->maxLength(255),
-                        TextInput::make('nomor')
-                            ->default('B-' . strtoupper(Str::random(8)))
-                            ->readOnly()
-                            ->required(),
-                        TextInput::make('penjual')
-                            ->required()
-                            ->maxLength(255),
-                        TextInput::make('pembeli')
-                            ->required()
-                            ->maxLength(255),
-                        TextInput::make('sertifikat_nama'),
-                        Textarea::make('persetujuan')
-                            ->columnSpanFull(),
-                        Select::make('current_assignee_id')
-                            ->label('Tugaskan ke Petugas 2')
-                            ->relationship(
-                                name: 'currentAssignee',
-                                titleAttribute: 'name',
-                                modifyQueryUsing: fn(Builder $query) => $query->whereHas(
-                                    'role',
-                                    fn(Builder $query) => $query->where('name', 'Petugas2')
-                                ),
-                            )
-                            ->searchable()
-                            ->preload()
-                            ->required()
-                            ->columnSpanFull(),
+                        TextInput::make('pbb_sppt')->label('SPPT'),
+                        TextInput::make('pbb_nop')->label('NOP'),
+                    ])->columns(3),
+
+                // SECTION BERKAS JUAL BELI
+                Section::make(function (Get $get): string {
+                    $jenisBerkas = $get('nama_berkas');
+                    return match ($jenisBerkas) {
+                        'hibah' => 'Data Pihak Hibah',
+                        'tukar_menukar' => 'Data Pihak Tukar Menukar',
+                        'aphb' => 'Data Pihak APHB',
+                        default => 'Data Pihak Jual Beli',
+                    };
+                })
+                    ->schema([
+                        Grid::make(3)->schema([
+                            // PIHAK PERTAMA (LABEL DINAMIS)
+                            Section::make(function (Get $get): string {
+                                $jenisBerkas = $get('nama_berkas');
+                                return match ($jenisBerkas) {
+                                    'hibah' => 'Data Pemberi Hibah',
+                                    'tukar_menukar' => 'Data Pihak A',
+                                    'aphb' => 'Data Pihak A',
+                                    default => 'Data Penjual',
+                                };
+                            })
+                                ->schema([
+                                    TextInput::make('penjual_data.nama')->label('Nama'),
+                                    TextInput::make('penjual_data.nik')->label('Identitas / NIK'),
+                                    TextInput::make('penjual_data.telp')->label('No. Telp'),
+                                    Textarea::make('penjual_data.alamat')->label('Alamat'),
+                                ]),
+
+                            // PIHAK KEDUA (LABEL DINAMIS)
+                            Section::make(function (Get $get): string {
+                                $jenisBerkas = $get('nama_berkas');
+                                return match ($jenisBerkas) {
+                                    'hibah' => 'Data Penerima Hibah',
+                                    'tukar_menukar' => 'Data Pihak B',
+                                    'aphb' => 'Data Pihak B',
+                                    default => 'Data Pembeli',
+                                };
+                            })
+                                ->schema([
+                                    TextInput::make('pembeli_data.nama')->label('Nama'),
+                                    TextInput::make('pembeli_data.nik')->label('Identitas / NIK'),
+                                    TextInput::make('pembeli_data.telp')->label('No. Telp'),
+                                    Textarea::make('pembeli_data.alamat')->label('Alamat'),
+                                ]),
+
+                            Section::make('Data Pihak Persetujuan')
+                                ->schema([
+                                    TextInput::make('pihak_persetujuan_data.nama')->label('Nama'),
+                                    TextInput::make('pihak_persetujuan_data.nik')->label('Identitas / NIK'),
+                                    TextInput::make('pihak_persetujuan_data.telp')->label('No. Telp'),
+                                    Textarea::make('pihak_persetujuan_data.alamat')->label('Alamat'),
+                                ]),
+                        ])
+                    ]),
+
+
+                // SECTION SERTIFIKAT
+                Section::make('Informasi Sertifikat')
+                    ->schema([
+                        TextInput::make('sertifikat_nomor')->label('Nomor Sertifikat'),
+                        TextInput::make('sertifikat_luas')->label('Luas (m²)')->suffix('m²'),
+                        Radio::make('sertifikat_jenis')
+                            ->label('Jenis Sertifikat')
+                            ->options([
+                                'elektronik' => 'Elektronik',
+                                'analog' => 'Analog',
+                            ]),
+                        Select::make('sertifikat_tipe')
+                            ->label('Tipe Sertifikat')
+                            ->options([
+                                'hm' => 'Hak Milik (HM)',
+                                'hgb' => 'Hak Guna Bangunan (HGB)',
+                                'hp' => 'Hak Pakai (HP)',
+                                'hgu' => 'Hak Guna Usaha'
+                            ])
+                            ->searchable(),
+                        TextInput::make('nilai_transaksi')
+                            ->label('Nilai Transaksi')
+                            ->prefix('Rp')
+                            ->mask(RawJs::from('$money($input, \',\')'))
+                            ->stripCharacters(',')
+                            ->dehydrateStateUsing(fn($state): ?string => $state ? preg_replace('/[^0-9]/', '', $state) : null)
+                            ->helperText('Masukkan total estimasi biaya awal.'),
                     ])->columns(2),
-                Section::make('Upload Lampiran Berkas')
+
+                // SECTION PBB
+                Section::make('Informasi Akta')
+                    ->schema([
+                        TextInput::make('pbb_validasi')->label('Validasi PBB'),
+                        TextInput::make('pbb_akta_bpjb')->label('Akta PPJB'),
+                        TextInput::make('pbb_nomor')->label('Nomor PBB'),
+                    ])->columns(3),
+
+
+
+                Section::make('Upload Dokumen')
                     ->schema([
                         Repeater::make('files')
                             ->relationship()
@@ -125,34 +234,60 @@ class BerkasResource extends Resource
                                         'ktp_istri' => 'KTP Istri',
                                         'kk' => 'Kartu Keluarga',
                                         'sertifikat' => 'Sertifikat',
+                                        'pbb' => 'PBB',
                                         'lainnya' => 'Lainnya',
                                     ])
-                                    ->required(),
+                                    ->required()
+                                    // 1. Buat dropdown ini reaktif
+                                    ->reactive(),
+
                                 FileUpload::make('path')
                                     ->label('Upload File')
                                     ->disk('public')
                                     ->directory('berkas-attachments')
                                     ->preserveFilenames()
                                     ->required(),
+
+                                // 2. Tambahkan TextInput kondisional
+                                TextInput::make('type_lainnya')
+                                    ->label('Sebutkan Jenis Dokumen')
+                                    ->placeholder('Contoh: Surat Kuasa')
+                                    // 3. Atur visibilitas dan persyaratan
+                                    ->visible(fn(Get $get): bool => $get('type') === 'lainnya')
+                                    ->required(fn(Get $get): bool => $get('type') === 'lainnya'),
                             ])
                             ->columns(2)
                             ->addActionLabel('Tambah Dokumen Lampiran')
-                            // ->mutateRelationshipDataBeforeCreateUsing(function (array $data): array {
-                            //     $data['uploaded_by'] = auth()->id();
-                            //     return $data;
-                            // }),
+                            // 4. Perbarui logika penyimpanan data
+                            ->mutateRelationshipDataBeforeCreateUsing(function (array $data): array {
+                                // Jika pengguna memilih 'lainnya', gunakan input teks sebagai gantinya.
+                                if ($data['type'] === 'lainnya' && isset($data['type_lainnya'])) {
+                                    $data['type'] = $data['type_lainnya'];
+                                }
+                                // Hapus data sementara yang tidak perlu disimpan
+                                unset($data['type_lainnya']);
+                                return $data;
+                            }),
                     ]),
-                Section::make('Biaya')
+
+
+                // Kolom penugasan (tetap ada di bawah agar alur kerja tidak berubah)
+                Section::make('Penugasan Awal')
                     ->schema([
-                        TextInput::make('total_cost')
-                            ->label('Total Biaya')
-                            ->required()
-                            ->prefix('Rp')
-                            ->mask(RawJs::from('$money($input, \',\')'))
-                            ->stripCharacters(',')
-                            ->placeholder('2,000,000')
-                            ->dehydrateStateUsing(fn(string $state): string => preg_replace('/[^0-9]/', '', $state)),
-                    ]),
+                        Select::make('current_assignee_id')
+                            ->label('Tugaskan ke Petugas 2')
+                            ->relationship(
+                                name: 'currentAssignee',
+                                titleAttribute: 'name',
+                                modifyQueryUsing: fn(Builder $query) => $query->whereHas(
+                                    'role',
+                                    fn(Builder $query) => $query->where('name', 'Petugas2')
+                                ),
+                            )
+                            ->searchable()
+                            ->preload()
+                            ->required(),
+                    ])
             ]);
     }
 
@@ -160,22 +295,58 @@ class BerkasResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('nomor')
-                    ->searchable(),
+                // Kolom penomoran yang sudah kita buat sebelumnya
+                // TextColumn::make('No.')
+                //     ->rowIndex()
+                //     ->formatStateUsing(function (HasTable $livewire, string $state): string {
+                //         $currentPage = $livewire->getTable()->getRecords()->currentPage();
+                //         $perPage = $livewire->getTable()->getRecords()->perPage();
+                //         return (string) (($currentPage - 1) * $perPage + (int) $state + 1);
+                //     }),
+                // --- INI BAGIAN YANG DIPERBARUI ---
+
+                // 1. Ganti 'nomor' menjadi 'nomor_berkas'
+                TextColumn::make('nomor_berkas')
+                    ->label('Nomor Berkas')
+                    // Logika pencarian terpusat di sini
+                    ->searchable(
+                        [
+                            'nomor_berkas',
+                            'nama_berkas',
+                            'nama_pemohon',
+                            'penjual_data->nama', // Cara mencari di dalam JSON
+                            'pembeli_data->nama', // Cara mencari di dalam JSON
+                        ],
+                        isIndividual: false
+                    ),
+
                 TextColumn::make('nama_berkas')
-                    ->searchable()
                     ->limit(25),
-                TextColumn::make('penjual')
-                    ->searchable(),
+
+                TextColumn::make('nama_pemohon'),
+
+                // 2. Tampilkan nama dari dalam kolom JSON 'penjual_data'
+                TextColumn::make('penjual_data.nama')
+                    ->label('Penjual'),
+
+                // 3. Tampilkan nama dari dalam kolom JSON 'pembeli_data'
+                TextColumn::make('pembeli_data.nama')
+                    ->label('Pembeli'),
+
                 BadgeColumn::make('current_stage_key')
                     ->label('Tahap Saat Ini'),
+
                 TextColumn::make('currentAssignee.name')
                     ->label('Ditugaskan Ke')
-                    ->default('N/A'),
-                TextColumn::make('total_cost')
-                    ->money('IDR')
-                    ->sortable(),
+                    ->state(fn($record): string => $record->status_overall->value === 'selesai' ? 'Selesai (Tidak ada)' : $record->currentAssignee?->name ?? 'Belum ditugaskan'),
+
+                // --- AKHIR DARI PERUBAHAN ---
             ])
+            ->actions([
+                ViewAction::make()->url(fn($record) => self::getUrl('view', ['record' => $record])),
+                // ViewAction::make()->url(fn(Berkas $record) => BerkasResource::getUrl('view', ['record' => $record])),
+            ])
+
             ->filters([
                 SelectFilter::make('current_stage_key')
                     ->label('Tahapan')
@@ -192,21 +363,35 @@ class BerkasResource extends Resource
     {
         return $infolist
             ->schema([
-                InfolistSection::make('Detail Berkas & Klien')
+                InfolistSection::make('Informasi Berkas')
                     ->schema([
-                        // Ganti semua TextEntry dengan satu ViewEntry
-                        ViewEntry::make('berkasDetails')
+                        ViewEntry::make('berkasInfo')
                             ->hiddenLabel()
-                            ->view('filament.infolists.sections.berkas-details-section'),
+                            ->view('filament.infolists.sections.berkas-info-section'),
                     ]),
 
-                InfolistSection::make('Status & Finansial')
+                InfolistSection::make('Data Pihak Jual Beli')
                     ->schema([
-                        // Ganti semua TextEntry dengan satu ViewEntry
-                        ViewEntry::make('statusFinancial')
+                        ViewEntry::make('jualBeliInfo')
                             ->hiddenLabel()
-                            ->view('filament.infolists.sections.status-financial-section'),
+                            ->view('filament.infolists.sections.jual-beli-section'),
                     ]),
+
+                InfolistSection::make('Informasi Sertifikat')
+                    ->schema([
+                        ViewEntry::make('sertifikatInfo')
+                            ->hiddenLabel()
+                            ->view('filament.infolists.sections.sertifikat-section'),
+                    ]),
+
+                InfolistSection::make('Informasi PBB')
+                    ->schema([
+                        ViewEntry::make('pbbInfo')
+                            ->hiddenLabel()
+                            ->view('filament.infolists.sections.pbb-section'),
+                    ]),
+
+               
                 InfolistSection::make('Lampiran Berkas')
                     ->schema([
                         RepeatableEntry::make('files')
@@ -215,34 +400,13 @@ class BerkasResource extends Resource
                                 TextEntry::make('type')
                                     ->label('Jenis Dokumen'),
 
-                                // --- INI BAGIAN YANG DIPERBARUI ---
+                                // --- INI BAGIAN YANG DIPERBARUI SECARA TOTAL ---
 
-                                // Komponen 1: Tampilkan ini HANYA JIKA file adalah gambar
+                                // Komponen 1: Tampilkan thumbnail gambar (tidak bisa diklik)
                                 ImageEntry::make('path')
                                     ->label('Pratinjau')
                                     ->disk('public')
                                     ->height(80)
-                                    // Membuat seluruh gambar bisa diklik untuk memicu Aksi
-                                    ->action(
-                                        Action::make('previewImage')
-                                            ->label('Lihat Ukuran Penuh')
-                                            ->modalHeading('Pratinjau Lampiran')
-                                            // Ganti ->infolist() dengan ->modalContent() untuk passing data manual
-                                            ->modalContent(
-                                                fn($record) =>
-                                                Infolist::make()
-                                                    ->record($record) // <-- Ini adalah bagian yang hilang
-                                                    ->schema([
-                                                        ImageEntry::make('path')
-                                                            ->hiddenLabel()
-                                                            ->disk('public')
-                                                            ->extraAttributes(['style' => 'display: block; max-width: 100%; height: auto; max-height: 75vh; margin: auto;']),
-                                                    ])
-                                            )
-                                            ->modalSubmitAction(false)
-                                            ->modalCancelAction(fn(\Filament\Actions\StaticAction $action) => $action->label('Tutup'))
-                                    )
-                                    // Logika visibilitas: hanya tampil jika file adalah gambar
                                     ->visible(function ($record): bool {
                                         if (!$record || !$record->path)
                                             return false;
@@ -261,7 +425,38 @@ class BerkasResource extends Resource
                                         return !Str::is(['*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp', '*.svg'], strtolower($record->path));
                                     }),
 
-                            ])->columns(2),
+                                // Komponen 3: Kolom Aksi Terpisah
+                                // TODO perbarui alignmentnya agar berada pada posisi yang sesuai.
+                                Actions::make([
+                                    // Aksi untuk membuka modal pratinjau
+                                    Action::make('preview')
+                                        ->label('Pratinjau')
+                                        ->icon('heroicon-o-eye')
+                                        ->modalContent(
+                                            fn($record) =>
+                                            Infolist::make()
+                                                ->record($record)
+                                                ->schema([
+                                                    ImageEntry::make('path')->hiddenLabel()->disk('public')->extraAttributes(['style' => 'display: block; max-width: 100%; height: auto; margin: auto;']),
+                                                ])
+                                        )
+                                        ->modalSubmitAction(false)
+                                        ->modalCancelAction(false) // Sembunyikan tombol default
+                                        ->visible(function ($record): bool {
+                                            if (!$record || !$record->path)
+                                                return false;
+                                            return Str::is(['*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp', '*.svg'], strtolower($record->path));
+                                        }),
+
+                                    // Aksi untuk mengunduh file
+                                    Action::make('download')
+                                        ->label('Unduh')
+                                        ->icon('heroicon-o-arrow-down-tray')
+                                        ->color('success')
+                                        ->url(fn($record) => route('berkas-files.download', ['berkasFile' => $record]), shouldOpenInNewTab: true)
+                                ])->label('Aksi')
+                                    ->alignment(Alignment::Center),
+                            ])->columns(3), // Ubah menjadi 3 kolom
                     ])->collapsible(),
 
                 InfolistSection::make('Riwayat & Durasi Pengerjaan')

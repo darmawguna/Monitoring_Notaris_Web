@@ -19,7 +19,7 @@ return new class extends Migration
             $table->decimal('amount', 14, 2);
             $table->string('payment_method')->nullable();
             $table->date('issued_at');
-            $table->text('notes')->nullable();
+            $table->text('informasi_kwitansi')->nullable();
             $table->foreignId('issued_by')->constrained('users');
             $table->timestamps();
         });
