@@ -70,7 +70,7 @@ class BerkasResource extends Resource
     {
         // Secara otomatis memuat relasi 'currentAssignee' dan 'createdBy'
         // untuk mencegah N+1 query di tabel dan infolist.
-        return parent::getEloquentQuery()->with(['currentAssignee', 'createdBy']);
+        return parent::getEloquentQuery()->with(['createdBy']);
     }
     /**
      * The column to use as the main title in global search results.
@@ -274,20 +274,20 @@ class BerkasResource extends Resource
                 // Kolom penugasan (tetap ada di bawah agar alur kerja tidak berubah)
                 Section::make('Penugasan Awal')
                     ->schema([
-                        Select::make('current_assignee_id')
+                        Select::make('petugas_2_id') // 1. Nama field sudah benar
                             ->label('Tugaskan ke Petugas 2')
-                            ->relationship(
-                                name: 'currentAssignee',
-                                titleAttribute: 'name',
-                                modifyQueryUsing: fn(Builder $query) => $query->whereHas(
+                            ->options( // 2. Menggunakan ->options() sudah benar
+                                User::whereHas(
                                     'role',
-                                    fn(Builder $query) => $query->where('name', 'Petugas2')
-                                ),
+                                    fn($query) => $query->where('name', 'Petugas2')
+                                )->pluck('name', 'id')
                             )
                             ->searchable()
                             ->preload()
-                            ->required(),
+                            ->required()
+                        // 3. HAPUS ->mapped(false) karena sudah ditangani di CreateBerkas.php
                     ])
+
             ]);
     }
 
@@ -295,16 +295,6 @@ class BerkasResource extends Resource
     {
         return $table
             ->columns([
-                // Kolom penomoran yang sudah kita buat sebelumnya
-                // TextColumn::make('No.')
-                //     ->rowIndex()
-                //     ->formatStateUsing(function (HasTable $livewire, string $state): string {
-                //         $currentPage = $livewire->getTable()->getRecords()->currentPage();
-                //         $perPage = $livewire->getTable()->getRecords()->perPage();
-                //         return (string) (($currentPage - 1) * $perPage + (int) $state + 1);
-                //     }),
-                // --- INI BAGIAN YANG DIPERBARUI ---
-
                 // 1. Ganti 'nomor' menjadi 'nomor_berkas'
                 TextColumn::make('nomor_berkas')
                     ->label('Nomor Berkas')
@@ -336,9 +326,17 @@ class BerkasResource extends Resource
                 BadgeColumn::make('current_stage_key')
                     ->label('Tahap Saat Ini'),
 
-                TextColumn::make('currentAssignee.name')
+                TextColumn::make('current_assignee_name')
                     ->label('Ditugaskan Ke')
-                    ->state(fn($record): string => $record->status_overall->value === 'selesai' ? 'Selesai (Tidak ada)' : $record->currentAssignee?->name ?? 'Belum ditugaskan'),
+                    ->state(function (Berkas $record): string {
+                        // Cari progres terakhir yang masih 'pending'
+                        $latestPendingProgress = $record->progress()->where('status', 'pending')->latest()->first();
+                        if ($record->status_overall->value === 'selesai') {
+                            return 'Selesai';
+                        }
+                        // Tampilkan nama petugas dari progres tersebut
+                        return $latestPendingProgress?->assignee?->name ?? 'Belum ditugaskan';
+                    }),
 
                 // --- AKHIR DARI PERUBAHAN ---
             ])
@@ -351,11 +349,6 @@ class BerkasResource extends Resource
                 SelectFilter::make('current_stage_key')
                     ->label('Tahapan')
                     ->options(StageKey::class),
-                SelectFilter::make('current_assignee_id')
-                    ->label('Petugas')
-                    ->relationship('currentAssignee', 'name')
-                    ->searchable()
-                    ->preload(),
             ]);
     }
 
@@ -391,7 +384,7 @@ class BerkasResource extends Resource
                             ->view('filament.infolists.sections.pbb-section'),
                     ]),
 
-               
+
                 InfolistSection::make('Lampiran Berkas')
                     ->schema([
                         RepeatableEntry::make('files')
