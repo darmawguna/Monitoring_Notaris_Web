@@ -13,6 +13,7 @@ use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Carbon;
+use Illuminate\Database\Eloquent\Model;
 
 class CreateBerkas extends CreateRecord
 {
@@ -23,6 +24,17 @@ class CreateBerkas extends CreateRecord
         return 'full';
     }
 
+    protected function handleRecordCreation(array $data): Model
+    {
+        // Pisahkan data petugas dari data utama
+        $petugas2Id = $data['petugas_2_id'];
+        unset($data['petugas_2_id']);
+
+        // Set tahap awal saat berkas dibuat
+        $data['current_stage_key'] = StageKey::PETUGAS_2;
+
+        return static::getModel()::create($data);
+    }
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         // 1. Dapatkan tahun saat ini
@@ -51,15 +63,14 @@ class CreateBerkas extends CreateRecord
     {
         $berkas = $this->getRecord();
 
-        // Buat entri progres untuk Front Office (SELESAI)
-        $berkas->progress()->create([
+        $this->record->progress()->create([
             'stage_key' => StageKey::FRONT_OFFICE,
             'status' => 'done',
-            'assignee_id' => $berkas->created_by,
-            'notes' => 'Berkas berhasil dibuat dan diteruskan.',
-            'started_at' => now(),
+            'notes' => 'Berkas diterima dan diverifikasi oleh Front Office.',
+            'assignee_id' => auth()->id(),
             'completed_at' => now(),
         ]);
+
 
         // Hitung dan simpan deadline untuk Petugas 2
         $deadlineDays = DeadlineConfig::where('stage_key', StageKey::PETUGAS_2)->value('default_days') ?? 3;
@@ -67,20 +78,20 @@ class CreateBerkas extends CreateRecord
         $deadline = Carbon::parse($startedAt)->addDays($deadlineDays);
 
         // Buat entri progres untuk Petugas 2 (PENDING) dengan deadline
-        $berkas->progress()->create([
+        $this->record->progress()->create([
             'stage_key' => StageKey::PETUGAS_2,
             'status' => 'pending',
-            'assignee_id' => $berkas->current_assignee_id,
-            'started_at' => $startedAt,
-            'deadline' => $deadline, // Simpan deadline yang sudah dihitung
+            'notes' => 'Berkas ditugaskan ke Petugas 2.',
+            'assignee_id' => $this->data['petugas_2_id'], // Ambil dari data form
+            'deadline' => $deadline
         ]);
 
         // Kirim notifikasi ke Petugas 2
-        $petugas2 = User::find($berkas->current_assignee_id);
+        $petugas2 = User::find($this->data['petugas_2_id']); // Gunakan ID dari form
         if ($petugas2) {
             Notification::make()
                 ->title('Anda menerima tugas baru!')
-                ->body("Berkas '{$berkas->nama_berkas}' dari Front Office telah ditugaskan kepada Anda.")
+                ->body("Berkas '{$this->record->nama_berkas}' dari Front Office telah ditugaskan kepada Anda.")
                 ->icon('heroicon-o-inbox-arrow-down')
                 ->actions([
                     NotificationAction::make('view')

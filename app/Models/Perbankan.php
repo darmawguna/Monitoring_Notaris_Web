@@ -2,12 +2,16 @@
 
 namespace App\Models;
 
+use App\Enums\BerkasStatus;
+use App\Enums\StageKey;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Models\Concerns\HasProgress;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\MorphMany; // <-- Tambahkan ini
 
 class Perbankan extends Model
 {
-    use HasFactory;
+    use HasFactory, HasProgress; // Trait HasFiles tidak diperlukan di sini
 
     protected $fillable = [
         'tipe_pemohon',
@@ -18,16 +22,28 @@ class Perbankan extends Model
         'ttl_tanggal',
         'npwp',
         'email',
-        'nomor_pk', // <-- Tambahkan ini
+        'nomor_pk',
         'nama_kreditur',
         'telepon',
-        'berkas_bank',
         'jangka_waktu',
         'tanggal_covernote',
+        'status_overall',
+        'current_stage_key',
+        'created_by',
     ];
 
     protected $casts = [
         'ttl_tanggal' => 'date',
         'tanggal_covernote' => 'date',
+        'status_overall' => BerkasStatus::class,
+        'current_stage_key' => StageKey::class,
     ];
+
+    /**
+     * Mendapatkan satu file yang terhubung dengan record Perbankan ini.
+     */
+    public function files(): MorphMany
+    {
+        return $this->morphMany(AppFile::class, 'fileable');
+    }
 }

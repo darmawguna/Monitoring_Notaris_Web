@@ -4,9 +4,12 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\PerbankanResource\Pages;
 use App\Models\Perbankan;
+use App\Models\user;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Grid;
+use Filament\Forms\Components\Grid as FormGrid;
+use Filament\Infolists\Components\Grid as InfolistGrid;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
@@ -18,6 +21,15 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Carbon;
 use Filament\Forms\Get;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Forms\Components\Repeater;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Infolist;
+use Filament\Infolists\Components\ViewEntry;
+use Illuminate\Database\Eloquent\Builder;
+use Filament\Infolists\Components\ImageEntry;
+use Filament\Infolists\Components\Actions\Action;
+use Illuminate\Support\Str;
 
 class PerbankanResource extends Resource
 {
@@ -53,7 +65,7 @@ class PerbankanResource extends Resource
                         TextInput::make('nik')->label('NIK'),
                         TextInput::make('nama_debitur')->label('Nama Debitur')->required(),
                         Textarea::make('alamat_debitur')->label('Alamat')->columnSpanFull(),
-                        Grid::make(2)->schema([
+                        FormGrid::make(2)->schema([
                             TextInput::make('ttl_tempat')->label('Tempat Lahir'),
                             DatePicker::make('ttl_tanggal')->label('Tanggal Lahir'),
                         ]),
@@ -72,12 +84,20 @@ class PerbankanResource extends Resource
 
                 Section::make('Informasi Covernote / SKMHT')
                     ->schema([
-                        FileUpload::make('berkas_bank')
+                        Repeater::make('files') // Nama harus cocok dengan relasi di Model
                             ->label('Upload Berkas Bank')
-                            ->disk('public')
-                            ->directory('perbankan-attachments')
-                            ->preserveFilenames(),
-                        // TODO ubah menjadi dropdown
+                            ->relationship() // Ini adalah kuncinya!
+                            ->schema([
+                                FileUpload::make('path') // Nama harus cocok dengan kolom di tabel 'app_files'
+                                    ->label('File')
+                                    ->disk('public')
+                                    ->directory('perbankan-attachments')
+                                    ->preserveFilenames()
+                                    ->required(),
+                            ])
+                            ->maxItems(1) // Batasi agar hanya bisa upload 1 file
+                            ->addActionLabel('Tambah Berkas Bank'),
+
                         Select::make('jangka_waktu')
                             ->label('Jangka Waktu')
                             ->default(1)
@@ -103,6 +123,20 @@ class PerbankanResource extends Resource
                             ->required()
                             ->default(now()),
                     ]),
+                Section::make('Penugasan Awal')
+                    ->schema([
+                        Select::make('petugas_2_id')
+                            ->label('Tugaskan ke Petugas 2')
+                            ->options(
+                                User::whereHas(
+                                    'role',
+                                    fn($query) => $query->where('name', 'Petugas2')
+                                )->pluck('name', 'id')
+                            )
+                            ->searchable()
+                            ->preload()
+                            ->required(),
+                    ])
             ]);
     }
 
@@ -140,11 +174,108 @@ class PerbankanResource extends Resource
             ]);
     }
 
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist
+            ->schema([
+                InfolistSection::make('Informasi Debitur')
+                    ->schema([
+                        InfoListGrid::make(2)->schema([
+                            TextEntry::make('tipe_pemohon')
+                                ->label('Tipe Pemohon')
+                                ->formatStateUsing(fn(?string $state): string => match ($state) {
+                                    'perorangan' => 'Perorangan',
+                                    'badan_usaha' => 'Badan Usaha',
+                                    default => $state ?? '-',
+                                }),
+                            TextEntry::make('nik')->label('NIK'),
+                            TextEntry::make('nama_debitur')->label('Nama Debitur'),
+                            TextEntry::make('alamat_debitur')->label('Alamat')->columnSpanFull(),
+                            TextEntry::make('ttl_tempat')->label('Tempat Lahir'),
+                            TextEntry::make('ttl_tanggal')->label('Tanggal Lahir')->date('d F Y'),
+                            TextEntry::make('npwp')->label('NPWP'),
+                            TextEntry::make('email')->label('Email'),
+                            TextEntry::make('telepon')->label('Telepon'),
+                        ]),
+                    ]),
+
+                InfolistSection::make('Informasi Kreditur')
+                    ->schema([
+                        InfoListGrid::make(2)->schema([
+                            TextEntry::make('nama_kreditur')->label('Nama Kreditur'),
+                            TextEntry::make('nomor_pk')->label('Nomor PK (Perjanjian Kredit)'),
+                        ]),
+                    ]),
+
+                InfolistSection::make('Informasi Covernote / SKMHT')
+                    ->schema([
+                        TextEntry::make('jangka_waktu')
+                            ->label('Jangka Waktu')
+                            ->formatStateUsing(function (?int $state, Get $get): string {
+                                if ($state === 0) {
+                                    $lainnya = $get('jangka_waktu_lainnya');
+                                    return $lainnya ? "{$lainnya} Bulan" : '-';
+                                }
+                                return match ($state) {
+                                    1 => '1 Bulan',
+                                    3 => '3 Bulan',
+                                    6 => '6 Bulan',
+                                    default => $state ? "{$state} Bulan" : '-',
+                                };
+                            }),
+                        TextEntry::make('tanggal_covernote')
+                            ->label('Tanggal Awal Covernote')
+                            ->date('d F Y'),
+                        ImageEntry::make('files.0.path') // Mengakses path dari file pertama di relasi
+                            ->label('Pratinjau Berkas')
+                            ->disk('public')
+                            ->height(150)
+                            ->visible(function ($record): bool {
+                                $file = $record->files->first(); // Dapatkan record file pertama
+                                if (!$file) {
+                                    return false;
+                                }
+                                return Str::is(['*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp'], strtolower($file->path));
+                            }),
+                        // Komponen untuk tombol Aksi (dengan logika yang diperbaiki)
+                        \Filament\Infolists\Components\Actions::make([
+                            Action::make('download')
+                                ->label('Download Berkas Bank')
+                                ->icon('heroicon-o-arrow-down-tray')
+                                ->color('success')
+                                // 1. Perbaiki logika URL
+                                ->url(function (Perbankan $record) {
+                                    // Dapatkan record file pertama dari relasi
+                                    $file = $record->files->first();
+                                    if ($file) {
+                                        // Kirim record AppFile yang benar ke rute
+                                        return route('files.download', ['appFile' => $file]);
+                                    }
+                                    return '#'; // URL fallback jika file tidak ada
+                                }, shouldOpenInNewTab: true)
+                                // 2. Perbaiki logika visibility
+                                ->visible(fn(Perbankan $record): bool => !$record->files->isEmpty()),
+                        ])->hiddenLabel(),
+                    ]),
+
+                // Opsional: Riwayat & Durasi (jika masih relevan)
+                InfolistSection::make('Riwayat & Durasi Pengerjaan')
+                    ->schema([
+                        ViewEntry::make('progressHistory')
+                            ->hiddenLabel()
+                            ->view('filament.infolists.sections.progress-history-section'),
+                    ])
+                    ->collapsible()
+                    ->collapsed(),
+            ]);
+    }
+
     public static function getPages(): array
     {
         return [
             'index' => Pages\ListPerbankans::route('/'),
             'create' => Pages\CreatePerbankan::route('/create'),
+            'view' => Pages\ViewPerbankan::route('/{record}'),
             'edit' => Pages\EditPerbankan::route('/{record}/edit'),
         ];
     }

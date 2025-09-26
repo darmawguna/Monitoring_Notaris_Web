@@ -10,17 +10,19 @@ class Progress extends Model
 {
     use HasFactory;
 
-    protected $table = 'progress'; // Eksplisit karena nama model singular
+    protected $table = 'progress';
 
     protected $fillable = [
-        'berkas_id',
+        'progressable_id',      // <-- Tambahkan ini
+        'progressable_type',    // <-- Tambahkan ini
         'stage_key',
         'status',
-        'assignee_id',
         'notes',
         'deadline',
         'started_at',
+
         'completed_at',
+        'assignee_id',          // <-- Tambahkan ini
     ];
 
     protected $casts = [
@@ -29,9 +31,9 @@ class Progress extends Model
         'completed_at' => 'datetime',
     ];
 
-    public function berkas(): BelongsTo
+    public function progressable()
     {
-        return $this->belongsTo(Berkas::class);
+        return $this->morphTo();
     }
 
     public function assignee(): BelongsTo

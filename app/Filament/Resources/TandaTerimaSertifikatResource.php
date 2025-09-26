@@ -9,9 +9,17 @@ use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
+use Filament\Infolists\Components\Actions\Action as InfolistAction;
+use Filament\Infolists\Components\ImageEntry;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
+use Filament\Tables\Actions\Action as TableAction;
+use Filament\Tables\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Str;
 
 class TandaTerimaSertifikatResource extends Resource
 {
@@ -23,6 +31,18 @@ class TandaTerimaSertifikatResource extends Resource
     protected static ?string $pluralModelLabel = 'Tanda Terima Sertifikat';
     protected static ?string $navigationLabel = 'Tanda Terima Sertifikat';
     protected static ?string $navigationGroup = 'Berkas';
+    public static function canViewAny(): bool
+    {
+        $user = auth()->user();
+        $userRole = $user->role->name;
+
+        // 1. Superadmin dan Front Office selalu bisa melihat.
+        if (in_array($userRole, ['Superadmin', 'FrontOffice'])) {
+            return true;
+        }
+
+        return false;
+    }
 
     public static function form(Form $form): Form
     {
@@ -51,6 +71,14 @@ class TandaTerimaSertifikatResource extends Resource
                             ->required()
                             ->maxLength(255),
                     ])->columns(2),
+                Section::make('Detail Informasi')
+                    ->schema([
+                        TextInput::make('informasi_tambahan')
+                            ->label('Detail informasi surat')
+                            ->required()
+                            ->helperText("masukan informasi terkait sertifikat yang diserahkan")
+                            ->maxLength(length: 1000), // ⚠️ Catatan penting di bawah!
+                    ]),
                 Section::make('Dokumen Akhir')
                     ->schema([
                         FileUpload::make('dokumen_akhir_path')
@@ -58,6 +86,43 @@ class TandaTerimaSertifikatResource extends Resource
                             ->disk('public')
                             ->directory('tanda-terima-attachments')
                             ->preserveFilenames(),
+                    ]),
+            ]);
+    }
+
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist
+            ->schema([
+                InfolistSection::make('Informasi Tanda Terima')
+                    ->schema([
+                        TextEntry::make('penyerah'),
+                        TextEntry::make('penerima'),
+                        TextEntry::make('tanggal_terima')->date('d F Y'),
+                        TextEntry::make('tanggal_menyerahkan')->date('d F Y'),
+                        TextEntry::make('sertifikat_info')->columnSpanFull(),
+                        TextEntry::make('informasi_tambahan')->columnSpanFull(),
+                    ])->columns(2),
+                InfolistSection::make('Dokumen Akhir')
+                    ->schema([
+                        ImageEntry::make('dokumen_akhir_path')
+                            ->label('Pratinjau')
+                            ->disk('public')
+                            ->height(150)
+                            ->visible(function ($record): bool {
+                                $path = $record->dokumen_akhir_path;
+                                if (!$path)
+                                    return false;
+                                return Str::is(['*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp'], strtolower($path));
+                            }),
+                        \Filament\Infolists\Components\Actions::make([
+                            InfolistAction::make('download_file')
+                                ->label('Download Lampiran')
+                                ->icon('heroicon-o-paper-clip')
+                                ->color('gray')
+                                ->url(fn(TandaTerimaSertifikat $record) => route('tanda-terima.file.download', ['record' => $record]), true)
+                                ->visible(fn(TandaTerimaSertifikat $record): bool => !empty($record->dokumen_akhir_path)),
+                        ])->hiddenLabel()
                     ]),
             ]);
     }
@@ -82,6 +147,15 @@ class TandaTerimaSertifikatResource extends Resource
             ])
             ->filters([
                 //
+            ])
+            ->actions([
+                TableAction::make('download')
+                    ->label('Download Dokumen')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->color('success')
+                    ->url(fn(TandaTerimaSertifikat $record) => route('tanda-terima.download', ['record' => $record]), shouldOpenInNewTab: true)
+                    ->tooltip('Download dokumen Word tanda terima')
+                    ->openUrlInNewTab(),
             ]);
     }
 
@@ -90,6 +164,7 @@ class TandaTerimaSertifikatResource extends Resource
         return [
             'index' => Pages\ListTandaTerimaSertifikats::route('/'),
             'create' => Pages\CreateTandaTerimaSertifikat::route('/create'),
+            'view' => Pages\ViewTandaTerimaSertifikat::route('/{record}'),
             'edit' => Pages\EditTandaTerimaSertifikat::route('/{record}/edit'),
         ];
     }

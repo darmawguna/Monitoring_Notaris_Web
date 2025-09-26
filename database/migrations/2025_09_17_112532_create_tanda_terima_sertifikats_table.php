@@ -17,6 +17,7 @@ return new class extends Migration {
             $table->date('tanggal_terima');
             $table->date('tanggal_menyerahkan');
             $table->string('sertifikat_info'); // Info sertifikat hak milik
+            $table->string("informasi_tambahan");
             $table->string('dokumen_akhir_path')->nullable(); // Path untuk file upload
             $table->foreignId('created_by')->constrained('users');
             $table->timestamps();

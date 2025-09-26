@@ -11,6 +11,8 @@ return new class extends Migration {
             $table->id();
             $table->string('nama_kasus');
             $table->foreignId('created_by')->constrained('users');
+            $table->string('status_overall')->nullable();
+            $table->string('current_stage_key')->nullable();
             $table->timestamps();
         });
     }

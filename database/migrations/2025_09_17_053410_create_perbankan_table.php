@@ -12,8 +12,6 @@ return new class extends Migration {
     {
         Schema::create('perbankans', function (Blueprint $table) {
             $table->id();
-
-            // Section Debitur
             $table->string('tipe_pemohon')->nullable();
             $table->string('nik')->nullable();
             $table->string('nama_debitur')->nullable();
@@ -25,12 +23,12 @@ return new class extends Migration {
             $table->string('telepon')->nullable();
             $table->string('nomor_pk')->nullable();
             $table->string('nama_kreditur')->nullable();
-
-            // Section Covernote / SKMHT
-            $table->string('berkas_bank')->nullable(); // Path untuk file upload
             $table->integer('jangka_waktu')->nullable(); // Dalam bulan (1, 3, 6)
             $table->date('tanggal_covernote')->nullable(); // Tanggal awal covernote
-
+            $table->string('status_overall')->nullable();
+            $table->string('current_stage_key')->nullable();
+            // Tambahkan kolom created_by sebagai foreign key ke tabel users
+            $table->foreignId('created_by')->nullable()->constrained('users');
             $table->timestamps();
         });
     }

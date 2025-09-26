@@ -1,0 +1,40 @@
+name: Deploy NotarisFlow to VPS
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Server via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            # Masuk ke direktori proyek
+            cd ~/notarisflow
+
+            # Ambil kode terbaru
+            git pull origin main
+
+            # Bangun ulang image dan jalankan service
+            docker-compose up -d --build
+
+            # Jalankan perintah post-deployment
+            docker-compose exec app php artisan migrate --force
+            docker-compose exec app php artisan optimize:clear
+            docker-compose exec app php artisan storage:link
+
+            # Reload Caddy untuk menerapkan konfigurasi terbaru jika ada perubahan
+            sudo systemctl reload caddy
+
+            # Bersihkan image Docker lama
+            docker image prune -f
+
+            echo "Deployment to VPS completed successfully!"
