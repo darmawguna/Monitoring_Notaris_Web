@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\BerkasStatus;
 use App\Enums\StageKey;
 use App\Models\Concerns\HasProgress;
+use App\Models\Concerns\HasFiles;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Berkas extends Model
 {
-    use HasFactory, HasProgress;
+    use HasFactory, HasProgress, HasFiles;
 
     protected $fillable = [
         'nomor_berkas',

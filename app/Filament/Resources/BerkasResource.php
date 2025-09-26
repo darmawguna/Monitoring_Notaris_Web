@@ -446,7 +446,7 @@ class BerkasResource extends Resource
                                         ->label('Unduh')
                                         ->icon('heroicon-o-arrow-down-tray')
                                         ->color('success')
-                                        ->url(fn($record) => route('berkas-files.download', ['berkasFile' => $record]), shouldOpenInNewTab: true)
+                                        ->url(fn($record) => route('files.download', ['appFile' => $record]), shouldOpenInNewTab: true)
                                 ])->label('Aksi')
                                     ->alignment(Alignment::Center),
                             ])->columns(3), // Ubah menjadi 3 kolom

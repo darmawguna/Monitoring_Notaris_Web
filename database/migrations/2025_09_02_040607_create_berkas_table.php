@@ -30,7 +30,6 @@ return new class extends Migration
             $table->string('current_stage_key');
 
             // Foreign keys & tracking
-            $table->foreignId('current_assignee_id')->nullable()->constrained('users');
             $table->dateTime('deadline_at')->nullable();
             // $table->foreignId('uploaded_by')->constrained('users');
             $table->foreignId('created_by')->constrained('users');
