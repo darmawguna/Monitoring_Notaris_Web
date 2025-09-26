@@ -42,6 +42,7 @@ class CreatePerbankan extends CreateRecord
             'assignee_id' => auth()->id(),
             'completed_at' => now(),
         ]);
+        // Deploy
         $deadlineDays = DeadlineConfig::where('stage_key', StageKey::PETUGAS_2)->value('default_days') ?? 3;
         $startedAt = now();
         $deadline = Carbon::parse($startedAt)->addDays($deadlineDays);
