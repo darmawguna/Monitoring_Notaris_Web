@@ -22,9 +22,12 @@ Route::get('/berkas-files/{berkasFile}/download', [BerkasFileController::class, 
 Route::get('/kwitansi/{receipt}/download', [KwitansiController::class, 'download'])
     ->name('kwitansi.download')
     ->middleware('auth');
-Route::get('/SerahTerima/{tandaTerimaSertifikat}/download', [TandaTerimaController::class, 'download'])
-    ->name('tandaSerahTerima.download')
-    ->middleware('auth');
+// Route::get('/SerahTerima/{tandaTerimaSertifikat}/download', [TandaTerimaController::class, 'download'])
+//     ->name('tandaSerahTerima.download');
+
+Route::get('/tanda-terima/{record}/download', [TandaTerimaController::class, 'download'])->name('tanda-terima.download')->middleware('auth');
+Route::get('/tanda-terima/{record}/download-file', [TandaTerimaController::class, 'downloadGambar'])->name('tanda-terima.file.download')->middleware('auth');
+;
 
 
 use App\Http\Controllers\ClientTrackingController;

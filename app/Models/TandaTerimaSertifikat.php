@@ -16,6 +16,7 @@ class TandaTerimaSertifikat extends Model
         'tanggal_terima',
         'tanggal_menyerahkan',
         'sertifikat_info',
+        'informasi_tambahan',
         'dokumen_akhir_path',
         'created_by',
     ];
@@ -23,6 +24,7 @@ class TandaTerimaSertifikat extends Model
     protected $casts = [
         'tanggal_terima' => 'date',
         'tanggal_menyerahkan' => 'date',
+        'created_at' => 'date',
     ];
 
     /**

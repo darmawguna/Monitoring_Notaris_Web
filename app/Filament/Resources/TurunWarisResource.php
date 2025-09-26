@@ -27,6 +27,7 @@ use Illuminate\Support\Str;
 use Filament\Infolists\Components\ViewEntry;
 use Illuminate\Support\Facades\Storage;
 
+
 class TurunWarisResource extends Resource
 {
     protected static ?string $model = TurunWaris::class;
@@ -37,6 +38,19 @@ class TurunWarisResource extends Resource
     protected static ?string $pluralModelLabel = 'Berkas Diluar Peralihan Hak';
     protected static ?string $navigationLabel = 'Berkas Diluar Peralihan Hak';
     protected static ?string $navigationGroup = 'Berkas'; // Grupkan bersama "Berkas Jual Beli"
+
+    public static function canViewAny(): bool
+    {
+        $user = auth()->user();
+        $userRole = $user->role->name;
+
+        // 1. Superadmin dan Front Office selalu bisa melihat.
+        if (in_array($userRole, ['Superadmin', 'FrontOffice'])) {
+            return true;
+        }
+
+        return false;
+    }
 
     public static function form(Form $form): Form
     {

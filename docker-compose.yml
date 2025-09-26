@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # Layanan Aplikasi Laravel (PHP-FPM + Worker)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: notarisflow_app
+    restart: unless-stopped
+    ports:
+      # Expose port 9000 dari kontainer ke port 9000 di VPS
+      # agar Caddy bisa menghubunginya melalui localhost:9000
+      - "9000:9000"
+    volumes:
+      - .:/var/www/html
+    networks:
+      - notarisflow_network
+    env_file:
+      - .env
+
+  # Layanan Database (MySQL)
+  db:
+    image: mysql:8.0
+    container_name: notarisflow_db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - notarisflow_network
+    env_file:
+      - .env
+
+networks:
+  notarisflow_network:
+    driver: bridge
+
+volumes:
+  db_data:
+    driver: local

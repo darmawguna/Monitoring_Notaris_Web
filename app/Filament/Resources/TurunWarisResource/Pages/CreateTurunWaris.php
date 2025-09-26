@@ -11,7 +11,8 @@ use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
-
+use App\Models\DeadlineConfig;
+use Illuminate\Support\Carbon;
 class CreateTurunWaris extends CreateRecord
 {
     protected static string $resource = TurunWarisResource::class;
@@ -46,6 +47,10 @@ class CreateTurunWaris extends CreateRecord
             'assignee_id' => auth()->id(),
             'completed_at' => now(),
         ]);
+        $deadlineDays = DeadlineConfig::where('stage_key', StageKey::PETUGAS_2)->value('default_days') ?? 3;
+        $startedAt = now();
+        $deadline = Carbon::parse($startedAt)->addDays($deadlineDays);
+
 
         // 2. Buat catatan progres "pending" untuk Petugas 2
         $this->record->progress()->create([
@@ -53,6 +58,7 @@ class CreateTurunWaris extends CreateRecord
             'status' => 'pending',
             'notes' => 'Berkas ditugaskan ke Petugas 2.',
             'assignee_id' => $this->data['petugas_2_id'], // Ambil ID dari form
+            'deadline' => $deadline
         ]);
 
         // 3. Kirim notifikasi ke Petugas 2

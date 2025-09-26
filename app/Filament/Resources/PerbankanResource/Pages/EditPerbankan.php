@@ -25,6 +25,18 @@ class EditPerbankan extends EditRecord
         return $data;
     }
 
+    protected function afterSave()
+    {
+        $filePath = $this->data['berkas_bank']; // Ambil path dari data form
+
+        if ($filePath) {
+            $this->record->file()->create([
+                'path' => $filePath,
+                'type' => 'berkas_bank', // Tandai jenis filenya
+            ]);
+        }
+    }
+
 
     protected function getHeaderActions(): array
     {

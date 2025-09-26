@@ -3,28 +3,26 @@
 namespace App\Filament\Resources\TugasResource\Pages;
 
 use App\Enums\StageKey;
+use App\Filament\Resources\BerkasResource;
+use App\Filament\Resources\PerbankanResource;
+use App\Filament\Resources\TandaTerimaSertifikatResource;
 use App\Filament\Resources\TugasResource;
+use App\Filament\Resources\TurunWarisResource;
 use App\Models\Berkas;
-use App\Models\DeadlineConfig;
+use App\Models\Perbankan;
+use App\Models\Progress;
+use App\Models\TandaTerimaSertifikat;
+use App\Models\TurunWaris;
 use App\Models\User;
-use Filament\Resources\Pages\ViewRecord;
-use Filament\Infolists\Infolist;
-use Filament\Infolists\Components\Section as InfolistSection;
-use Filament\Infolists\Components\ViewEntry;
-use Filament\Infolists\Components\RepeatableEntry;
-use Filament\Infolists\Components\ImageEntry;
-use Filament\Infolists\Components\TextEntry;
-use Filament\Infolists\Components\Actions as InfolistActions;
-use Filament\Infolists\Components\Actions\Action as InfolistAction;
-use Filament\Support\Enums\Alignment;
+use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
-use Filament\Actions;
-use Filament\Notifications\Notification;
+use Filament\Infolists\Components\Section;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Infolist;
 use Filament\Notifications\Actions\Action as NotificationAction;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
-use Illuminate\Support\Carbon;
+use Filament\Notifications\Notification;
+use Filament\Resources\Pages\ViewRecord;
 
 class ViewTugas extends ViewRecord
 {
@@ -32,137 +30,75 @@ class ViewTugas extends ViewRecord
 
     public function getTitle(): string
     {
-        /** @var Berkas $record */
+        /** @var Progress $record */
         $record = $this->record;
-        return "Detail Tugas: {$record->nama_berkas}";
+        $parent = $record->progressable;
+
+        // Membuat judul halaman yang dinamis
+        $identifier = match (get_class($parent)) {
+            Berkas::class => $parent->nomor_berkas,
+            Perbankan::class => $parent->nama_debitur,
+            TurunWaris::class => $parent->nama_kasus,
+            TandaTerimaSertifikat::class => $parent->penerima,
+            default => 'N/A',
+        };
+
+        return "Detail Tugas: " . $identifier;
     }
 
     public function infolist(Infolist $infolist): Infolist
     {
+        /** @var Progress $record */
+        $record = $this->getRecord();
+        $parentRecord = $record->progressable; // Ambil record induk (Berkas, Perbankan, dll.)
+        $parentClass = get_class($parentRecord);
+
+        // Tentukan Resource yang sesuai berdasarkan kelas model induk
+        $resourceClass = match ($parentClass) {
+            Berkas::class => BerkasResource::class,
+            Perbankan::class => PerbankanResource::class,
+            TurunWaris::class => TurunWarisResource::class,
+            TandaTerimaSertifikat::class => TandaTerimaSertifikatResource::class,
+            default => null,
+        };
+
+        // Jika resource yang sesuai ditemukan, "pinjam" skema infolist-nya
+        if ($resourceClass) {
+            return $resourceClass::infolist($infolist->record($parentRecord));
+        }
+
+        // Fallback jika model tidak dikenal
         return $infolist->schema([
-            InfolistSection::make('Informasi Berkas')
+            Section::make('Informasi Tugas')
                 ->schema([
-                    ViewEntry::make('berkasInfo')
-                        ->hiddenLabel()
-                        ->view('filament.infolists.sections.berkas-info-section'),
+                    TextEntry::make('stage_key')->label('Tahap'),
+                    TextEntry::make('deadline')->label('Deadline')->date('d F Y'),
+                    TextEntry::make('progressable_type')->label('Tipe Dokumen'),
                 ]),
-
-            InfolistSection::make('Data Pihak Jual Beli')
-                ->schema([
-                    ViewEntry::make('jualBeliInfo')
-                        ->hiddenLabel()
-                        ->view('filament.infolists.sections.jual-beli-section'),
-                ]),
-
-            InfolistSection::make('Informasi Sertifikat')
-                ->schema([
-                    ViewEntry::make('sertifikatInfo')
-                        ->hiddenLabel()
-                        ->view('filament.infolists.sections.sertifikat-section'),
-                ]),
-
-            InfolistSection::make('Informasi PBB')
-                ->schema([
-                    ViewEntry::make('pbbInfo')
-                        ->hiddenLabel()
-                        ->view('filament.infolists.sections.pbb-section'),
-                ]),
-
-            InfolistSection::make('Informasi Bank')
-                ->schema([
-                    ViewEntry::make('bankInfo')
-                        ->hiddenLabel()
-                        ->view('filament.infolists.sections.bank-section'),
-                ]),
-
-            InfolistSection::make('Lampiran Berkas')
-                ->schema([
-                    RepeatableEntry::make('files')
-                        ->hiddenLabel()
-                        ->schema([
-                            TextEntry::make('type')
-                                ->label('Jenis Dokumen'),
-
-                            // THUMBNAIL JIKA GAMBAR
-                            ImageEntry::make('path')
-                                ->label('Pratinjau')
-                                ->disk('public')
-                                ->height(80)
-                                ->visible(
-                                    fn($record): bool =>
-                                    $record && $record->path &&
-                                    preg_match('/\.(png|jpe?g|gif|webp|svg)$/i', $record->path) === 1
-                                ),
-
-                            // TEKS + LINK JIKA BUKAN GAMBAR
-                            TextEntry::make('path')
-                                ->label('File')
-                                ->formatStateUsing(fn(?string $state): string => $state ? basename($state) : 'N/A')
-                                ->url(fn($record) => $record->path ? Storage::url($record->path) : null, true)
-                                ->color('primary')
-                                ->visible(
-                                    fn($record): bool =>
-                                    $record && $record->path &&
-                                    preg_match('/\.(png|jpe?g|gif|webp|svg)$/i', $record->path) !== 1
-                                ),
-
-                            // AKSI PREVIEW & UNDUH
-                            InfolistActions::make([
-                                InfolistAction::make('preview')
-                                    ->label('Pratinjau')
-                                    ->icon('heroicon-o-eye')
-                                    ->modalContent(function ($record) {
-                                        return Infolist::make()
-                                            ->record($record)
-                                            ->schema([
-                                                ImageEntry::make('path')
-                                                    ->hiddenLabel()
-                                                    ->disk('public')
-                                                    ->extraAttributes([
-                                                        'style' => 'display:block;max-width:100%;height:auto;margin:auto;',
-                                                    ]),
-                                            ]);
-                                    })
-                                    ->modalSubmitAction(false)
-                                    ->modalCancelAction(false)
-                                    ->visible(
-                                        fn($record): bool =>
-                                        $record && $record->path &&
-                                        preg_match('/\.(png|jpe?g|gif|webp|svg)$/i', $record->path) === 1
-                                    ),
-
-                                InfolistAction::make('download')
-                                    ->label('Unduh')
-                                    ->icon('heroicon-o-arrow-down-tray')
-                                    ->color('success')
-                                    ->url(fn($record) => route('berkas-files.download', ['berkasFile' => $record]), true),
-                            ])->label('Aksi')->alignment(Alignment::Center),
-                        ])
-                        ->columns(3),
-                ])
-                ->collapsible(),
         ]);
     }
 
-    /**
-     * Header actions: Proses Berkas (menggantikan "Riwayat & Durasi Pengerjaan")
-     */
     protected function getHeaderActions(): array
     {
-        return [
-            Actions\Action::make('process')
-                ->label('Proses Berkas')
-                ->icon('heroicon-o-arrow-right-circle')
-                ->form(function () {
-                    /** @var Berkas $record */
-                    $record = $this->record;
+        /** @var Progress $record */
+        $record = $this->record;
+        $parentRecord = $record->progressable;
 
-                    $nextRoleName = match ($record->current_stage_key) {
+        // Hanya tampilkan tombol jika tugas masih 'pending'
+        if ($record->status !== 'pending') {
+            return [];
+        }
+
+        return [
+            Action::make('process')
+                ->label('Proses Tugas')
+                ->icon('heroicon-o-arrow-right-circle')
+                ->form(function () use ($parentRecord) {
+                    $nextRoleName = match ($parentRecord->current_stage_key) {
                         StageKey::PETUGAS_2 => 'Pajak',
                         StageKey::PAJAK => 'Petugas5',
                         default => null,
                     };
-
                     if ($nextRoleName) {
                         return [
                             Textarea::make('notes')->label('Catatan Pengerjaan')->required(),
@@ -172,100 +108,45 @@ class ViewTugas extends ViewRecord
                                 ->searchable()->preload()->required(),
                         ];
                     }
-
-                    return [
-                        Textarea::make('notes')->label('Catatan Pengerjaan Final')->required(),
-                    ];
+                    return [Textarea::make('notes')->label('Catatan Pengerjaan Final')->required()];
                 })
-                ->action(function (array $data) {
-                    /** @var Berkas $record */
-                    $record = $this->record;
-
-                    // 1) Tutup progress aktif milik user ini
-                    $currentProgress = $record->progress()
-                        ->where('assignee_id', auth()->id())
-                        ->where('status', 'pending')
-                        ->latest('started_at')
-                        ->first();
-
-                    if (!$currentProgress) {
-                        Notification::make()
-                            ->title('Tidak ada tugas aktif untuk Anda pada berkas ini.')
-                            ->danger()
-                            ->send();
-                        return;
-                    }
-
-                    $currentProgress->update([
-                        'notes' => $data['notes'] ?? null,
+                ->action(function (array $data) use ($record, $parentRecord) {
+                    // 1. Selesaikan tugas saat ini
+                    $record->update([
+                        'notes' => $data['notes'],
                         'status' => 'done',
                         'completed_at' => now(),
                     ]);
 
-                    // 2) Tentukan next stage (jika ada) atau selesai total
-                    $nextStage = null;
-                    if ($record->current_stage_key === StageKey::PETUGAS_2)
-                        $nextStage = StageKey::PAJAK;
-                    if ($record->current_stage_key === StageKey::PAJAK)
-                        $nextStage = StageKey::PETUGAS_5;
-
+                    // 2. Tentukan tahap selanjutnya
+                    $nextStage = match ($parentRecord->current_stage_key) {
+                        StageKey::PETUGAS_2 => StageKey::PAJAK,
+                        StageKey::PAJAK => StageKey::PETUGAS_5,
+                        default => null,
+                    };
                     $nextAssigneeId = $data['next_assignee_id'] ?? null;
-                    $nextAssignee = $nextAssigneeId ? User::find($nextAssigneeId) : null;
 
-                    if ($nextStage && $nextAssignee) {
-                        $deadlineDays = DeadlineConfig::where('stage_key', $nextStage)->value('default_days') ?? 3;
-                        $startedAt = now();
-                        $deadline = Carbon::parse($startedAt)->addDays($deadlineDays);
-
-                        $record->progress()->create([
+                    // 3. Jika ada tahap selanjutnya, buat tugas baru
+                    if ($nextStage && $nextAssigneeId) {
+                        $parentRecord->progress()->create([
                             'stage_key' => $nextStage,
                             'status' => 'pending',
                             'assignee_id' => $nextAssigneeId,
-                            'started_at' => $startedAt,
-                            'deadline' => $deadline,
                         ]);
+                        $parentRecord->update(['current_stage_key' => $nextStage]);
 
-                        $record->update([
-                            'current_stage_key' => $nextStage,
-                            'current_assignee_id' => $nextAssigneeId,
-                        ]);
-
-                        Notification::make()
-                            ->title('Anda menerima tugas baru!')
-                            ->body("Berkas '{$record->nama_berkas}' telah diteruskan kepada Anda.")
-                            ->icon('heroicon-o-inbox-arrow-down')
-                            ->actions([
-                                NotificationAction::make('view')
-                                    ->label('Lihat Tugas')
-                                    ->url(TugasResource::getUrl('index'))
-                                    ->markAsRead(),
-                            ])
-                            ->sendToDatabase($nextAssignee);
+                        // Kirim notifikasi
+                        $nextAssignee = User::find($nextAssigneeId);
+                        Notification::make()->title('Anda menerima tugas baru!')->sendToDatabase($nextAssignee);
                     } else {
-                        // Selesai total
-                        $record->update([
-                            'status_overall' => 'selesai',
-                            'current_stage_key' => StageKey::SELESAI,
-                            'current_assignee_id' => null,
-                        ]);
-
-                        $superadmins = User::whereHas('role', fn($q) => $q->where('name', 'Superadmin'))->get();
-                        Notification::make()
-                            ->title('Sebuah Berkas Telah Selesai!')
-                            ->body("Berkas '{$record->nama_berkas}' telah menyelesaikan seluruh alur kerja.")
-                            ->icon('heroicon-o-check-badge')
-                            ->actions([
-                                NotificationAction::make('view')
-                                    ->label('Lihat Berkas')
-                                    ->url(\App\Filament\Resources\BerkasResource::getUrl('view', ['record' => $record]))
-                                    ->markAsRead(),
-                            ])
-                            ->sendToDatabase($superadmins);
+                        // Jika tidak ada, selesaikan record induk
+                        $parentRecord->update(['status_overall' => 'selesai', 'current_stage_key' => StageKey::SELESAI]);
                     }
+                    Notification::make()->title('Tugas berhasil diproses')->success()->send();
 
-                    Notification::make()->title('Berkas berhasil diproses')->success()->send();
-                })
-                ->modalWidth('2xl'),
+                    // Arahkan kembali ke halaman daftar tugas
+                    $this->redirect(TugasResource::getUrl('index'));
+                }),
         ];
     }
 }

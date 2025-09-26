@@ -31,6 +31,18 @@ class KwitansiResource extends Resource
     protected static ?string $pluralModelLabel = 'Audit Kwitansi';
     protected static ?string $navigationLabel = 'Kwitansi';
     protected static ?string $navigationGroup = 'Keuangan';
+    public static function canViewAny(): bool
+    {
+        $user = auth()->user();
+        $userRole = $user->role->name;
+
+        // 1. Superadmin dan Front Office selalu bisa melihat.
+        if (in_array($userRole, ['Superadmin', 'FrontOffice'])) {
+            return true;
+        }
+
+        return false;
+    }
     // ... (properti lain tetap sama)
 
     public static function form(Form $form): Form
