@@ -49,7 +49,7 @@ class KwitansiResource extends Resource
                         // Opsi untuk menautkan ke berkas yang sudah ada
                         Select::make('berkas_id')
                             ->label('Tautkan ke Berkas (Opsional)')
-                            ->relationship('berkas', 'nama_berkas')
+                            ->relationship('berkas', 'nomor_berkas')
                             ->searchable()
                             ->preload(),
                         Textarea::make('notes_kwitansi')
