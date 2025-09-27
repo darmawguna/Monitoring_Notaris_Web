@@ -1,6 +1,5 @@
 FROM php:8.2-fpm-alpine
 WORKDIR /var/www/html
-# Testing deployment
 # OS deps
 RUN apk add --no-cache supervisor libzip-dev zip unzip \
     libpng-dev libjpeg-turbo-dev freetype-dev icu-dev libxml2-dev bash
