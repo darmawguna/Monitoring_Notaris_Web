@@ -1,40 +1,51 @@
-name: Deploy NotarisFlow to VPS
+name: Deploy to VPS (Caddy host)
 
 on:
-  push:
-    branches: [ "main" ]
+  workflow_run:
+    workflows: ["Build & Push Image (Docker Hub)"]
+    types: ["completed"]
+    branches: ["main"]
 
 jobs:
   deploy:
-    name: Deploy to VPS
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to Server via SSH
-        uses: appleboy/ssh-action@master
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1.1.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
           port: 22
           script: |
-            # Masuk ke direktori proyek
-            cd ~/notarisflow
+            set -e
+            cd /home/ubuntu/projectdarma/docuhub
 
             # Ambil kode terbaru
-            git pull origin main
+            git fetch --all
+            git reset --hard origin/main
 
-            # Bangun ulang image dan jalankan service
-            docker-compose up -d --build
+            # Install vendor pakai container composer (host tetap bersih)
+            docker run --rm -v "$PWD":/app -w /app \
+              composer:2 install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 
-            # Jalankan perintah post-deployment
-            docker-compose exec app php artisan migrate --force
-            docker-compose exec app php artisan optimize:clear
-            docker-compose exec app php artisan storage:link
+            # Build asset frontend pakai container Node
+            docker run --rm -v "$PWD":/app -w /app \
+              node:20-alpine sh -lc "npm ci && npm run build"
 
-            # Reload Caddy untuk menerapkan konfigurasi terbaru jika ada perubahan
-            sudo systemctl reload caddy
+            # Tarik image runtime terbaru & naikkan stack
+            docker compose pull
+            docker compose up -d
 
-            # Bersihkan image Docker lama
+            # Tunggu app siap & jalankan artisan (non-TTY)
+            sleep 8
+            docker compose exec -T app php artisan migrate --force
+            docker compose exec -T app php artisan optimize:clear
+            docker compose exec -T app php artisan storage:link || true
+
+            # Reload Caddy host (jika pakai systemd)
+            sudo systemctl reload caddy || true
+
+            # Bersihkan images tak terpakai
             docker image prune -f
-
-            echo "Deployment to VPS completed successfully!"

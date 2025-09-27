@@ -1,28 +1,28 @@
 version: '3.8'
 
 services:
-  # Layanan Aplikasi Laravel (PHP-FPM + Worker)
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: notarisflow_app
+    image: docker.io/darmawiguna/docuhub:latest
+    container_name: docuhub_app
     restart: unless-stopped
+    # batasi ke loopback agar hanya Caddy host yang bisa akses
     ports:
-      # Expose port 9000 dari kontainer ke port 9000 di VPS
-      # agar Caddy bisa menghubunginya melalui localhost:9000
-      - "9000:9000"
+      - "127.0.0.1:9000:9000"
+    env_file: [.env]
     volumes:
       - .:/var/www/html
-    networks:
-      - notarisflow_network
-    env_file:
-      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "php -v || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
 
-  # Layanan Database (MySQL)
   db:
     image: mysql:8.0
-    container_name: notarisflow_db
+    container_name: docuhub_db
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: ${DB_DATABASE}
@@ -31,15 +31,11 @@ services:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
     volumes:
       - db_data:/var/lib/mysql
-    networks:
-      - notarisflow_network
-    env_file:
-      - .env
-
-networks:
-  notarisflow_network:
-    driver: bridge
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p${DB_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
 volumes:
   db_data:
-    driver: local
