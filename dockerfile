@@ -1,14 +1,17 @@
-# --- Tahap 1: Build Aset Frontend (Menggunakan Image Debian/Bookworm) ---
+# --- Tahap 1: Build Aset Frontend (The Reliable Way) ---
 FROM node:20-bookworm AS frontend_builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
-COPY . .
 
 # --- PERBAIKAN DI SINI ---
-# Atur environment variable untuk memberitahu Rollup agar tidak menggunakan biner native
+# Gunakan 'npm ci' untuk instalasi yang bersih dan andal di CI/CD.
+# Ini menggunakan package-lock.json secara eksklusif dan seringkali lebih stabil.
+RUN npm ci
+
+COPY . .
+
+# Tetap gunakan ENV sebagai failsafe jika diperlukan
 ENV ROLLUP_SKIP_NODEJS=true
-# Jalankan build. Sekarang ia akan menggunakan fallback JavaScript yang andal.
 RUN npm run build
 
 
