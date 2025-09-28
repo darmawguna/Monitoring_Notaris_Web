@@ -11,7 +11,7 @@ ENV ROLLUP_SKIP_NODEJS=true
 COPY package*.json ./
 
 # Jalankan instalasi bersih. Sekarang ia akan mengabaikan dependensi opsional yang bermasalah.
-RUN npm ci
+RUN npm ci --no-optional
 
 # Salin sisa source code (tanpa node_modules karena ada di .dockerignore)
 COPY . .
