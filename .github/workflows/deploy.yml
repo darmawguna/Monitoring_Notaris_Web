@@ -1,4 +1,4 @@
-name: Deploy to VPS (Caddy host)
+name: Deploy to VPS (Caddy host, DB cache/session/queue)
 
 on:
   workflow_run:
@@ -27,11 +27,11 @@ jobs:
             git fetch --all
             git reset --hard origin/main
 
-            echo "===> Pull image terbaru & naikkan stack"
+            echo "===> Pull image terbaru & naikkan stack (agar service app aktif)"
             docker compose pull
             docker compose up -d
 
-            echo "===> Install vendor di dalam container app (punya ext-intl)"
+            echo "===> Composer install (di dalam container app: ext-intl tersedia)"
             docker compose exec -T app composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 
             echo "===> Build aset frontend (Node Debian/glibc + clean install)"
@@ -42,18 +42,50 @@ jobs:
                 rm -rf node_modules package-lock.json
                 npm cache clean --force
                 npm install --include=optional
-                # Jika masih gagal karena Rollup native, aktifkan fallback JS:
+                # Jika masih error karena Rollup native, aktifkan fallback JS:
                 # export ROLLUP_SKIP_NODEJS=true
                 npm run build
               '
 
-            echo "===> Artisan commands"
-            # Jika pertama kali & APP_KEY belum ada, perintah berikut hanya menampilkan key
-            docker compose exec -T app php artisan key:generate --show || true
+            echo "===> Buat migration untuk DB cache/session/queue (sekali saja, jika belum ada)"
+            # Catatan:
+            # - Perintah di bawah hanya membuat file migration JIKA belum ada file dengan pola yang sesuai.
+            # - File hasil generate bersifat untracked (tidak di-commit), tapi tetap tersimpan di server sehingga tidak dibuat ulang.
+            # - Jalankan migrate setelah memastikan file migration tersedia.
 
-            docker compose exec -T app php artisan optimize:clear
+            # Cache table
+            if ! compgen -G "database/migrations/*_create_cache_table.php" > /dev/null; then
+              echo "-> generate cache:table"
+              docker compose exec -T app php artisan cache:table
+            else
+              echo "-> skip cache:table (sudah ada)"
+            fi
+
+            # Session table
+            if ! compgen -G "database/migrations/*_create_sessions_table.php" > /dev/null; then
+              echo "-> generate session:table"
+              docker compose exec -T app php artisan session:table
+            else
+              echo "-> skip session:table (sudah ada)"
+            fi
+
+            # Queue tables (jobs & failed_jobs)
+            if ! compgen -G "database/migrations/*_create_jobs_table.php" > /dev/null; then
+              echo "-> generate queue:table"
+              docker compose exec -T app php artisan queue:table
+            else
+              echo "-> skip queue:table (sudah ada)"
+            fi
+
+            echo "===> Jalankan migrasi (wajib sebelum optimize:clear jika pakai DB cache)"
             docker compose exec -T app php artisan migrate --force
+
+            echo "===> Artisan lainnya"
+            docker compose exec -T app php artisan optimize:clear
             docker compose exec -T app php artisan storage:link || true
+
+            # Jika pertama kali & APP_KEY belum ada, tampilkan untuk disalin ke .env
+            docker compose exec -T app php artisan key:generate --show || true
 
             echo "===> Reload Caddy host & cleanup"
             sudo systemctl reload caddy || true
