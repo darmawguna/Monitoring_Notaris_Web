@@ -19,10 +19,10 @@ RUN { \
   echo 'opcache.interned_strings_buffer=16'; \
 } > /usr/local/etc/php/conf.d/opcache.ini
 
-# **Tambahan**: sertakan Composer di image runtime
+# Tambahkan Composer CLI ke image runtime (agar composer install jalan di 'app')
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Supervisor: jalankan php-fpm (opsional: queue worker)
+# Supervisor: jalankan php-fpm
 COPY docker/supervisor/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 EXPOSE 9000

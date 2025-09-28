@@ -11,13 +11,13 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - name: SSH deploy
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.1.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
-          port: ${{ secrets.VPS_PORT }}
+          port: 22
           script: |
             set -e
             cd /home/ubuntu/projectdarma/docuhub
@@ -26,27 +26,29 @@ jobs:
             git fetch --all
             git reset --hard origin/main
 
-            # Pastikan image terbaru & service aktif (agar 'app' ready untuk composer)
+            # Pastikan image terbaru & service aktif
             docker compose pull
             docker compose up -d
 
-            # Install vendor DI DALAM container app (ext-intl tersedia)
+            # Install vendor DI DALAM container app (php ada ext-intl)
             docker compose exec -T app composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 
-            # Build asset frontend (Vite) pakai container Node
+            # Build asset frontend (gunakan Debian-based Node agar Rollup OK)
             docker run --rm -v "$PWD":/app -w /app \
-              node:20-alpine sh -lc "npm ci && npm run build"
+              node:20-bookworm bash -lc "
+                rm -rf node_modules &&
+                npm ci --include=optional &&
+                npm run build
+              "
 
-            # Jalankan artisan
-            # Jika APP_KEY belum ada, tampilkan dulu (copy manual ke .env bila perlu)
-            docker compose exec -T app php artisan key:generate --show || true
-
+            # Artisan
             docker compose exec -T app php artisan optimize:clear
             docker compose exec -T app php artisan migrate --force
             docker compose exec -T app php artisan storage:link || true
 
-            # Reload Caddy host (jika pakai systemd)
-            sudo systemctl reload caddy || true
+            # Jika pertama kali & APP_KEY belum terisi, tampilkan untuk disalin ke .env
+            docker compose exec -T app php artisan key:generate --show || true
 
-            # Bersihkan image tak terpakai
+            # Reload Caddy host dan bersihkan images
+            sudo systemctl reload caddy || true
             docker image prune -f
