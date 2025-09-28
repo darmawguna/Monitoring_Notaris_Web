@@ -1,19 +1,16 @@
 # --- Tahap 1: Build Aset Frontend (The Reliable Way) ---
+# --- Stage 1: Frontend build (Vite/Rollup) ---
 FROM node:20-bookworm AS frontend_builder
 WORKDIR /app
+
+# Install deps pakai lockfile + optional deps (fix Rollup native)
 COPY package*.json ./
+ENV ROLLUP_SKIP_NODEJS=1
+RUN npm ci --include=optional
 
-# --- PERBAIKAN DI SINI ---
-# Gunakan 'npm ci' untuk instalasi yang bersih dan andal di CI/CD.
-# Ini menggunakan package-lock.json secara eksklusif dan seringkali lebih stabil.
-RUN npm ci
-
+# Copy source & build
 COPY . .
-
-# Tetap gunakan ENV sebagai failsafe jika diperlukan
-ENV ROLLUP_SKIP_NODEJS=true
 RUN npm run build
-
 
 # --- Tahap 2: Build Image Produksi Final ---
 FROM php:8.2-fpm-alpine
