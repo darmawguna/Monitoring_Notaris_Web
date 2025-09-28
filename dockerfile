@@ -1,6 +1,6 @@
 # --- Tahap 1: Build Aset Frontend (Tetap Sama) ---
 # Menggunakan image Node.js sebagai 'builder' sementara
-FROM node:20-alpine AS frontend_builder
+FROM node:20-bookworm AS frontend_builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
