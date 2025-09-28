@@ -1,21 +1,14 @@
 # --- Stage 1: Frontend build (Vite/Rollup) ---
-FROM --platform=linux/amd64 node:20-bookworm AS frontend_builder
+FROM node:20-bookworm AS frontend_builder
 WORKDIR /app
 
-# Bersihkan cache npm dan install fresh
-RUN npm cache clean --force
-
-# Salin package files
+# Install deps pakai lockfile + optional deps (fix Rollup native)
 COPY package*.json ./
+ENV ROLLUP_SKIP_NODEJS=1
+RUN npm ci --include=optional
 
-# Install dengan flag tambahan untuk native modules
-RUN npm ci --platform=linux --arch=x64
-
-# Salin source code
+# Copy source & build
 COPY . .
-
-# Set NODE_ENV dan jalankan build
-ENV NODE_ENV=production
 RUN npm run build
 
 # --- Tahap 2: Build Image Produksi Final ---
