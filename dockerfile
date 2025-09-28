@@ -1,24 +1,9 @@
-# --- Tahap 1: Build Aset Frontend (The Bulletproof Way) ---
-FROM node:20-bookworm AS frontend_builder
-WORKDIR /app
-COPY package*.json ./
-# Gunakan 'npm ci' untuk instalasi yang bersih
-RUN npm ci --no-optional
-# Salin sisa source code
-COPY . .
-
-# --- PERBAIKAN DI SINI ---
-# HAPUS paksa file loader native dari Rollup.
-# Ini akan memaksa Rollup untuk menggunakan fallback JavaScript murni yang andal.
-RUN rm ./node_modules/rollup/dist/native.js
-
-# Jalankan build. Sek
-
-# --- Tahap 2: Build Image Produksi Final ---
+# --- Tahap 1: Build Image Produksi Final ---
+# Kita tidak lagi memerlukan stage frontend terpisah
 FROM php:8.2-fpm-alpine
 WORKDIR /var/www/html
 
-# 1. INSTAL SEMUA DEPENDENSI TERLEBIH DAHULU
+# 1. INSTAL SEMUA DEPENDENSI PHP
 RUN apk add --no-cache supervisor libzip-dev zip unzip \
     libpng-dev libjpeg-turbo-dev freetype-dev icu-dev libxml2-dev
 
@@ -41,15 +26,14 @@ COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-interaction --optimize-autoloader
 
 # 3. SALIN KODE APLIKASI & LAKUKAN OPTIMASI
+# Kode yang disalin sekarang sudah termasuk /public/build
 COPY . .
 RUN php artisan optimize
 RUN php artisan view:cache
 RUN php artisan filament:cache-components
 
-# 4. SALIN ASET FRONTEND & FINALISASI
-COPY --from=frontend_builder /app/public/build ./public/build
+# 4. FINALISASI
 COPY docker/supervisor/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
 EXPOSE 9000
