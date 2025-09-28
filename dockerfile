@@ -1,23 +1,18 @@
 # --- Tahap 1: Build Aset Frontend (The Bulletproof Way) ---
 FROM node:20-bookworm AS frontend_builder
 WORKDIR /app
-
-# --- PERBAIKAN DI SINI ---
-# Atur environment variable SEBELUM instalasi.
-# Ini memberitahu 'npm ci' untuk tidak mencoba menginstal biner native opsional.
-ENV ROLLUP_SKIP_NODEJS=true
-
-# Salin hanya file package untuk caching
 COPY package*.json ./
-
-# Jalankan instalasi bersih. Sekarang ia akan mengabaikan dependensi opsional yang bermasalah.
+# Gunakan 'npm ci' untuk instalasi yang bersih
 RUN npm ci --no-optional
-
-# Salin sisa source code (tanpa node_modules karena ada di .dockerignore)
+# Salin sisa source code
 COPY . .
 
-# Jalankan build. Sekarang ia akan menggunakan fallback JavaScript yang andal.
-RUN npm run build
+# --- PERBAIKAN DI SINI ---
+# HAPUS paksa file loader native dari Rollup.
+# Ini akan memaksa Rollup untuk menggunakan fallback JavaScript murni yang andal.
+RUN rm ./node_modules/rollup/dist/native.js
+
+# Jalankan build. Sek
 
 # --- Tahap 2: Build Image Produksi Final ---
 FROM php:8.2-fpm-alpine
