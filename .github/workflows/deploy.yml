@@ -10,6 +10,7 @@ jobs:
   deploy:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.1.0
@@ -22,33 +23,40 @@ jobs:
             set -e
             cd /home/ubuntu/projectdarma/docuhub
 
-            # Update source code
+            echo "===> Update source code"
             git fetch --all
             git reset --hard origin/main
 
-            # Pastikan image terbaru & service aktif
+            echo "===> Pull image terbaru & naikkan stack"
             docker compose pull
             docker compose up -d
 
-            # Install vendor DI DALAM container app (php ada ext-intl)
+            echo "===> Install vendor di dalam container app (punya ext-intl)"
             docker compose exec -T app composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 
-            # Build asset frontend (gunakan Debian-based Node agar Rollup OK)
+            echo "===> Build aset frontend (Node Debian/glibc + clean install)"
             docker run --rm -v "$PWD":/app -w /app \
-              node:20-bookworm bash -lc "
-                rm -rf node_modules &&
-                npm ci --include=optional &&
+              node:20-bookworm bash -lc '
+                set -e
+                echo "Node: $(node --version) | npm: $(npm --version)"
+                rm -rf node_modules package-lock.json
+                npm cache clean --force
+                npm install --include=optional
+                # Jika masih gagal karena Rollup native, aktifkan fallback JS:
+                # export ROLLUP_SKIP_NODEJS=true
                 npm run build
-              "
+              '
 
-            # Artisan
+            echo "===> Artisan commands"
+            # Jika pertama kali & APP_KEY belum ada, perintah berikut hanya menampilkan key
+            docker compose exec -T app php artisan key:generate --show || true
+
             docker compose exec -T app php artisan optimize:clear
             docker compose exec -T app php artisan migrate --force
             docker compose exec -T app php artisan storage:link || true
 
-            # Jika pertama kali & APP_KEY belum terisi, tampilkan untuk disalin ke .env
-            docker compose exec -T app php artisan key:generate --show || true
-
-            # Reload Caddy host dan bersihkan images
+            echo "===> Reload Caddy host & cleanup"
             sudo systemctl reload caddy || true
             docker image prune -f
+
+            echo "===> Deploy selesai"
