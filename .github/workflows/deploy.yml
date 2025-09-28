@@ -23,15 +23,21 @@ jobs:
             set -e
             cd /home/ubuntu/projectdarma/docuhub
 
+            echo "===> Muat variabel .env agar bisa dipakai di shell"
+            # export seluruh key .env ke environment shell saat ini
+            set -a
+            source .env
+            set +a
+
             echo "===> Update source code"
             git fetch --all
             git reset --hard origin/main
 
-            echo "===> Pull image terbaru & naikkan stack (agar service app aktif)"
+            echo "===> Pull image terbaru & naikkan stack (agar service app/db aktif)"
             docker compose pull
             docker compose up -d
 
-            echo "===> Composer install (di dalam container app: ext-intl tersedia)"
+            echo "===> Composer install (dalam container app: ext-intl tersedia)"
             docker compose exec -T app composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 
             echo "===> Build aset frontend (Node Debian/glibc + clean install)"
@@ -42,49 +48,66 @@ jobs:
                 rm -rf node_modules package-lock.json
                 npm cache clean --force
                 npm install --include=optional
-                # Jika masih error karena Rollup native, aktifkan fallback JS:
+                # Jika masih gagal karena Rollup native, aktifkan fallback JS:
                 # export ROLLUP_SKIP_NODEJS=true
                 npm run build
               '
 
-            echo "===> Buat migration untuk DB cache/session/queue (sekali saja, jika belum ada)"
-            # Catatan:
-            # - Perintah di bawah hanya membuat file migration JIKA belum ada file dengan pola yang sesuai.
-            # - File hasil generate bersifat untracked (tidak di-commit), tapi tetap tersimpan di server sehingga tidak dibuat ulang.
-            # - Jalankan migrate setelah memastikan file migration tersedia.
+            echo "===> Helper cek tabel di MySQL"
+            # fungsi bash untuk cek apakah tabel ada di DB
+            check_table_exists () {
+              TBL="$1"
+              docker compose exec -T db sh -lc "mysql -uroot -p\"$DB_ROOT_PASSWORD\" -Nse \"SELECT 1 FROM information_schema.tables WHERE table_schema='${DB_DATABASE}' AND table_name='${TBL}' LIMIT 1;\"" >/dev/null 2>&1
+            }
 
-            # Cache table
-            if ! compgen -G "database/migrations/*_create_cache_table.php" > /dev/null; then
-              echo "-> generate cache:table"
-              docker compose exec -T app php artisan cache:table
+            echo "===> Tangani migration untuk cache/session/queue (idempotent)"
+            # 1) sessions
+            if check_table_exists "sessions"; then
+              echo "-> Tabel 'sessions' SUDAH ada. Hapus file migration agar tidak dijalankan."
+              rm -f database/migrations/*_create_sessions_table.php || true
             else
-              echo "-> skip cache:table (sudah ada)"
+              if ! compgen -G "database/migrations/*_create_sessions_table.php" > /dev/null; then
+                echo "-> Generate migration sessions:table (tabel belum ada & file belum ada)"
+                docker compose exec -T app php artisan session:table
+              else
+                echo "-> File migration sessions ada, tabel belum ada: lanjut migrate nanti"
+              fi
             fi
 
-            # Session table
-            if ! compgen -G "database/migrations/*_create_sessions_table.php" > /dev/null; then
-              echo "-> generate session:table"
-              docker compose exec -T app php artisan session:table
+            # 2) cache
+            if check_table_exists "cache"; then
+              echo "-> Tabel 'cache' SUDAH ada. Hapus file migration agar tidak dijalankan."
+              rm -f database/migrations/*_create_cache_table.php || true
             else
-              echo "-> skip session:table (sudah ada)"
+              if ! compgen -G "database/migrations/*_create_cache_table.php" > /dev/null; then
+                echo "-> Generate migration cache:table (tabel belum ada & file belum ada)"
+                docker compose exec -T app php artisan cache:table
+              else
+                echo "-> File migration cache ada, tabel belum ada: lanjut migrate nanti"
+              fi
             fi
 
-            # Queue tables (jobs & failed_jobs)
-            if ! compgen -G "database/migrations/*_create_jobs_table.php" > /dev/null; then
-              echo "-> generate queue:table"
-              docker compose exec -T app php artisan queue:table
+            # 3) jobs & failed_jobs
+            if check_table_exists "jobs"; then
+              echo "-> Tabel 'jobs' SUDAH ada. Hapus file migration agar tidak dijalankan."
+              rm -f database/migrations/*_create_jobs_table.php || true
             else
-              echo "-> skip queue:table (sudah ada)"
+              if ! compgen -G "database/migrations/*_create_jobs_table.php" > /dev/null; then
+                echo "-> Generate migration queue:table (tabel jobs/failed_jobs belum ada & file belum ada)"
+                docker compose exec -T app php artisan queue:table
+              else
+                echo "-> File migration jobs ada, tabel belum ada: lanjut migrate nanti"
+              fi
             fi
 
-            echo "===> Jalankan migrasi (wajib sebelum optimize:clear jika pakai DB cache)"
+            echo "===> Jalankan migrasi (setelah sinkron file/tabel)"
             docker compose exec -T app php artisan migrate --force
 
             echo "===> Artisan lainnya"
             docker compose exec -T app php artisan optimize:clear
             docker compose exec -T app php artisan storage:link || true
 
-            # Jika pertama kali & APP_KEY belum ada, tampilkan untuk disalin ke .env
+            echo "===> (Opsional) Tampilkan APP_KEY jika pertama kali"
             docker compose exec -T app php artisan key:generate --show || true
 
             echo "===> Reload Caddy host & cleanup"
