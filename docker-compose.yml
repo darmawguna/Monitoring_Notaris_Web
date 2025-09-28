@@ -5,7 +5,6 @@ services:
     image: docker.io/darmawiguna/docuhub:latest
     container_name: docuhub_app
     restart: unless-stopped
-    # batasi ke loopback agar hanya Caddy host yang bisa akses
     ports:
       - "127.0.0.1:9000:9000"
     env_file: [.env]
@@ -31,6 +30,8 @@ services:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
     volumes:
       - db_data:/var/lib/mysql
+    ports:
+      - "127.0.0.1:3308:3308"
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -p${DB_ROOT_PASSWORD} --silent"]
       interval: 10s

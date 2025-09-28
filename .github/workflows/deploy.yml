@@ -22,30 +22,31 @@ jobs:
             set -e
             cd /home/ubuntu/projectdarma/docuhub
 
-            # Ambil kode terbaru
+            # Update source code
             git fetch --all
             git reset --hard origin/main
 
-            # Install vendor pakai container composer (host tetap bersih)
-            docker run --rm -v "$PWD":/app -w /app \
-              composer:2 install --no-dev --prefer-dist --no-interaction --optimize-autoloader
-
-            # Build asset frontend pakai container Node
-            docker run --rm -v "$PWD":/app -w /app \
-              node:20-alpine sh -lc "npm ci && npm run build"
-
-            # Tarik image runtime terbaru & naikkan stack
+            # Pastikan image terbaru & service aktif (agar 'app' ready untuk composer)
             docker compose pull
             docker compose up -d
 
-            # Tunggu app siap & jalankan artisan (non-TTY)
-            sleep 8
-            docker compose exec -T app php artisan migrate --force
+            # Install vendor DI DALAM container app (ext-intl tersedia)
+            docker compose exec -T app composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
+
+            # Build asset frontend (Vite) pakai container Node
+            docker run --rm -v "$PWD":/app -w /app \
+              node:20-alpine sh -lc "npm ci && npm run build"
+
+            # Jalankan artisan
+            # Jika APP_KEY belum ada, tampilkan dulu (copy manual ke .env bila perlu)
+            docker compose exec -T app php artisan key:generate --show || true
+
             docker compose exec -T app php artisan optimize:clear
+            docker compose exec -T app php artisan migrate --force
             docker compose exec -T app php artisan storage:link || true
 
             # Reload Caddy host (jika pakai systemd)
             sudo systemctl reload caddy || true
 
-            # Bersihkan images tak terpakai
+            # Bersihkan image tak terpakai
             docker image prune -f
