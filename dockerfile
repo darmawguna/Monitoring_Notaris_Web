@@ -2,14 +2,13 @@
 # --- Stage 1: Frontend build (Vite/Rollup) ---
 FROM node:20-bookworm AS frontend_builder
 WORKDIR /app
-
-# Install deps pakai lockfile + optional deps (fix Rollup native)
+# Salin hanya file package untuk caching
 COPY package*.json ./
-ENV ROLLUP_SKIP_NODEJS=1
-RUN npm ci --include=optional
-
-# Copy source & build
+# Jalankan instalasi bersih
+RUN npm ci
+# Salin sisa source code (tanpa node_modules karena ada di .dockerignore)
 COPY . .
+# Jalankan build
 RUN npm run build
 
 # --- Tahap 2: Build Image Produksi Final ---
