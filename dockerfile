@@ -1,14 +1,21 @@
-# --- Tahap 1: Build Aset Frontend (The Reliable Way) ---
 # --- Stage 1: Frontend build (Vite/Rollup) ---
-FROM node:20-bookworm AS frontend_builder
+FROM --platform=linux/amd64 node:20-bookworm AS frontend_builder
 WORKDIR /app
-# Salin hanya file package untuk caching
+
+# Bersihkan cache npm dan install fresh
+RUN npm cache clean --force
+
+# Salin package files
 COPY package*.json ./
-# Jalankan instalasi bersih
-RUN npm ci
-# Salin sisa source code (tanpa node_modules karena ada di .dockerignore)
+
+# Install dengan flag tambahan untuk native modules
+RUN npm ci --platform=linux --arch=x64
+
+# Salin source code
 COPY . .
-# Jalankan build
+
+# Set NODE_ENV dan jalankan build
+ENV NODE_ENV=production
 RUN npm run build
 
 # --- Tahap 2: Build Image Produksi Final ---
