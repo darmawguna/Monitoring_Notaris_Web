@@ -33,5 +33,5 @@ jobs:
           tags: |
             darmawiguna/docuhub:latest
             darmawiguna/docuhub:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # cache-from: type=gha
+          # cache-to: type=gha,mode=max
