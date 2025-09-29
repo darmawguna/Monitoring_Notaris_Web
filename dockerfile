@@ -1,5 +1,3 @@
-# --- Tahap 1: Build Image Produksi Final ---
-# Kita tidak lagi memerlukan stage frontend terpisah
 FROM php:8.2-fpm-alpine
 WORKDIR /var/www/html
 
@@ -21,13 +19,17 @@ RUN { \
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# 2. INSTAL DEPENDENSI COMPOSER
+# 2. INSTAL DEPENDENSI COMPOSER (TANPA MENJALANKAN SKRIP)
 COPY composer.json composer.lock ./
-RUN composer install --no-dev --no-interaction --optimize-autoloader
+
+# --- PERBAIKAN DI SINI ---
+# Tambahkan --no-scripts untuk mencegah error 'artisan not found'
+RUN composer install --no-dev --no-interaction --optimize-autoloader --no-scripts
 
 # 3. SALIN KODE APLIKASI & LAKUKAN OPTIMASI
 # Kode yang disalin sekarang sudah termasuk /public/build
 COPY . .
+# Jalankan optimasi sekarang, setelah semua file aplikasi (termasuk 'artisan') sudah ada
 RUN php artisan optimize
 RUN php artisan view:cache
 RUN php artisan filament:cache-components
