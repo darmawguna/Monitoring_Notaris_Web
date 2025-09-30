@@ -1,8 +1,74 @@
+# Git
 .git
-node_modules
-vendor
+.github
+.gitignore
+.gitattributes
+
+# Dependencies (akan di-install di build)
+/node_modules
+/vendor
+
+# Environment
 .env
-storage/logs
-storage/framework/cache/*
-storage/framework/sessions/*
-storage/framework/views/*
+.env.*
+!.env.example
+
+# Storage (akan di-mount dari host)
+/storage/*.key
+/storage/app/*
+!/storage/app/public
+!/storage/app/.gitignore
+/storage/framework/cache/*
+!/storage/framework/cache/.gitignore
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitignore
+/storage/framework/testing/*
+!/storage/framework/testing/.gitignore
+/storage/framework/views/*
+!/storage/framework/views/.gitignore
+/storage/logs/*
+!/storage/logs/.gitignore
+
+# Build artifacts
+/public/hot
+/public/storage
+/bootstrap/cache/*
+!bootstrap/cache/.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+/tests
+/phpunit.xml
+/.phpunit.result.cache
+
+# Documentation
+README.md
+CHANGELOG.md
+CONTRIBUTING.md
+LICENSE.md
+*.md
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# CI/CD
+.gitlab-ci.yml
+.travis.yml
+azure-pipelines.yml
+
+# Backup files
+*.sql
+*.backup
+backup_*
