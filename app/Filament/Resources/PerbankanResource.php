@@ -30,7 +30,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\Actions\Action;
 use Illuminate\Support\Str;
-
+use Illuminate\Database\Eloquent\Model;
 class PerbankanResource extends Resource
 {
     protected static ?string $model = Perbankan::class;
@@ -44,12 +44,44 @@ class PerbankanResource extends Resource
     protected static ?string $navigationGroup = 'Berkas';
     // protected static ?int $navigationSort = 4;
 
-    public static function canViewAny(): bool
+    public static function getEloquentQuery(): Builder
     {
-        $userRole = auth()->user()->role->name;
-        return in_array($userRole, ['Superadmin', 'FrontOffice']);
+        $user = auth()->user();
+        $query = parent::getEloquentQuery();
+
+        // Jika pengguna BUKAN Superadmin atau FrontOffice, filter daftar berkasnya.
+        if (!in_array($user->role->name, ['Superadmin', 'FrontOffice'])) {
+            // Tampilkan hanya berkas Perbankan di mana pengguna ini memiliki tugas 'pending'
+            return $query->whereHas('progress', function (Builder $q) use ($user) {
+                $q->where('assignee_id', $user->id)->where('status', 'pending');
+            });
+        }
+
+        // Untuk admin, tampilkan semuanya.
+        return $query;
     }
 
+    // --- PERBAIKAN 2: Otorisasi Per Record ---
+    public static function canView(Model $record): bool
+    {
+        $user = auth()->user();
+
+        // Superadmin & FrontOffice selalu bisa melihat detail apapun.
+        if (in_array($user->role->name, ['Superadmin', 'FrontOffice'])) {
+            return true;
+        }
+
+        // Petugas hanya bisa melihat jika mereka memiliki tugas 'pending' di record ini.
+        return $record->progress()
+            ->where('assignee_id', $user->id)
+            ->where('status', 'pending')
+            ->exists();
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return auth()->user()->role->name === 'Superadmin';
+    }
     public static function form(Form $form): Form
     {
         return $form

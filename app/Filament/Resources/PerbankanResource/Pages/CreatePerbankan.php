@@ -12,10 +12,22 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use App\Models\DeadlineConfig;
 use Illuminate\Support\Carbon;
+use Illuminate\Database\Eloquent\Model;
 class CreatePerbankan extends CreateRecord
 {
     protected static string $resource = PerbankanResource::class;
 
+    protected function handleRecordCreation(array $data): Model
+    {
+        // Pisahkan data petugas dari data utama
+        $petugas2Id = $data['petugas_2_id'];
+        unset($data['petugas_2_id']);
+
+        // Set tahap awal saat berkas dibuat
+        $data['current_stage_key'] = StageKey::PETUGAS_2;
+
+        return static::getModel()::create($data);
+    }
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         if (isset($data['jangka_waktu']) && $data['jangka_waktu'] == 0 && isset($data['jangka_waktu_lainnya'])) {

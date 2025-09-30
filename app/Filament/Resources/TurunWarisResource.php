@@ -26,7 +26,8 @@ use Filament\Support\Enums\Alignment;
 use Illuminate\Support\Str;
 use Filament\Infolists\Components\ViewEntry;
 use Illuminate\Support\Facades\Storage;
-
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 
 class TurunWarisResource extends Resource
 {
@@ -39,17 +40,38 @@ class TurunWarisResource extends Resource
     protected static ?string $navigationLabel = 'Berkas Diluar Peralihan Hak';
     protected static ?string $navigationGroup = 'Berkas'; // Grupkan bersama "Berkas Jual Beli"
 
-    public static function canViewAny(): bool
+    public static function getEloquentQuery(): Builder
     {
         $user = auth()->user();
-        $userRole = $user->role->name;
+        $query = parent::getEloquentQuery();
 
-        // 1. Superadmin dan Front Office selalu bisa melihat.
-        if (in_array($userRole, ['Superadmin', 'FrontOffice'])) {
+        // Jika pengguna BUKAN Superadmin atau FrontOffice, filter daftar berkasnya.
+        if (!in_array($user->role->name, ['Superadmin', 'FrontOffice'])) {
+            // Tampilkan hanya berkas Perbankan di mana pengguna ini memiliki tugas 'pending'
+            return $query->whereHas('progress', function (Builder $q) use ($user) {
+                $q->where('assignee_id', $user->id)->where('status', 'pending');
+            });
+        }
+
+        // Untuk admin, tampilkan semuanya.
+        return $query;
+    }
+
+    // --- PERBAIKAN 2: Otorisasi Per Record ---
+    public static function canView(Model $record): bool
+    {
+        $user = auth()->user();
+
+        // Superadmin & FrontOffice selalu bisa melihat detail apapun.
+        if (in_array($user->role->name, ['Superadmin', 'FrontOffice'])) {
             return true;
         }
 
-        return false;
+        // Petugas hanya bisa melihat jika mereka memiliki tugas 'pending' di record ini.
+        return $record->progress()
+            ->where('assignee_id', $user->id)
+            ->where('status', 'pending')
+            ->exists();
     }
 
     public static function form(Form $form): Form

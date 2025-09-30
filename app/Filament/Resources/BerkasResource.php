@@ -41,8 +41,6 @@ use Illuminate\Database\Eloquent\Model;
 use Filament\Infolists\Components\Actions; // Namespace untuk ActionsColumn
 use Filament\Support\Enums\Alignment;
 use Filament\Tables\Actions\ViewAction;
-// use Filament\Infolists\Components\Actions\Action;
-// use Filament\Infolists\Components\ImageEntry;
 
 class BerkasResource extends Resource
 {
@@ -53,25 +51,48 @@ class BerkasResource extends Resource
     protected static ?string $navigationLabel = 'Berkas Peralihan Hak';
     protected static ?string $navigationGroup = 'Berkas';
 
-    public static function canViewAny(): bool
+    public static function getEloquentQuery(): Builder
     {
         $user = auth()->user();
-        $userRole = $user->role->name;
+        $query = parent::getEloquentQuery();
+        // Jika pengguna BUKAN Superadmin atau FrontOffice, filter daftar berkasnya.
+        if (!in_array($user->role->name, ['Superadmin', 'FrontOffice'])) {
+            // Tampilkan hanya berkas di mana pengguna ini memiliki tugas yang 'pending'
+            return $query->whereHas('progress', function (Builder $q) use ($user) {
+                $q->where('assignee_id', $user->id)->where('status', 'pending');
+            });
+        }
 
-        // 1. Superadmin dan Front Office selalu bisa melihat.
-        if (in_array($userRole, ['Superadmin', 'FrontOffice'])) {
+        // Untuk Superadmin dan FrontOffice, tampilkan semuanya dan muat relasi yang dibutuhkan.
+        return $query->with(['createdBy']);
+    }
+
+    // --- DITAMBAHKAN: OTORISASI PER RECORD ---
+    /**
+     * Tentukan apakah pengguna bisa melihat record detail.
+     */
+    public static function canView(Model $record): bool
+    {
+        $user = auth()->user();
+
+        // Superadmin & FrontOffice selalu bisa melihat detail apapun.
+        if (in_array($user->role->name, ['Superadmin', 'FrontOffice'])) {
             return true;
         }
 
-        return false;
+        // Petugas hanya bisa melihat jika mereka memiliki tugas 'pending' di berkas ini.
+        // Ini adalah "penjaga pintu" yang memeriksa "tiket" dari TugasResource.
+        return $record->progress()
+            ->where('assignee_id', $user->id)
+            ->where('status', 'pending')
+            ->exists();
     }
 
-    public static function getEloquentQuery(): Builder
+    public static function canEdit(Model $record): bool
     {
-        // Secara otomatis memuat relasi 'currentAssignee' dan 'createdBy'
-        // untuk mencegah N+1 query di tabel dan infolist.
-        return parent::getEloquentQuery()->with(['createdBy']);
+        return auth()->user()->role->name === 'Superadmin';
     }
+
     /**
      * The column to use as the main title in global search results.
      */
@@ -87,11 +108,6 @@ class BerkasResource extends Resource
         'pembeli',
     ];
 
-    public static function canEdit(Model $record): bool
-    {
-        // Hanya izinkan edit jika peran pengguna adalah Superadmin.
-        return auth()->user()->role->name === 'Superadmin';
-    }
 
     public static function form(Form $form): Form
     {

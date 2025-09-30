@@ -17,6 +17,9 @@ use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Filament\Forms\Get;
+use Filament\Forms\Set;
 
 class UserResource extends Resource
 {
@@ -48,12 +51,32 @@ class UserResource extends Resource
                         TextInput::make('name')
                             ->label('Nama Lengkap')
                             ->required()
-                            ->maxLength(255),
+                            ->maxLength(255)
+                            // 1. Jadikan field nama reaktif, update saat fokus hilang (onBlur)
+                            ->live(onBlur: true)
+                            // 2. Setelah nama diisi, jalankan logika untuk membuat email
+                            ->afterStateUpdated(function (Get $get, Set $set) {
+                                $name = $get('name');
+                                if ($name) {
+                                    // Ambil domain dari file .env, dengan fallback default
+                                    $domain = env('USER_EMAIL_DOMAIN', 'notarisflow.com');
+
+                                    // Buat format email: nama.tanpa.spasi@domain.com
+                                    // Contoh: "Darma Wiguna" -> "darma.wiguna"
+                                    $emailName = Str::slug($name, '.');
+
+                                    // Set nilai field 'email'
+                                    $set('email', strtolower($emailName) . '@' . $domain);
+                                }
+                            }),
                         TextInput::make('email')
                             ->email()
                             ->required()
                             ->maxLength(255)
-                            ->unique(ignoreRecord: true), // Unik, kecuali untuk record saat ini (saat edit)
+                            ->unique(ignoreRecord: true)
+                            // 3. Buat field email menjadi tidak bisa diedit
+                            ->disabled()
+                            ->dehydrated(), // Pastikan tetap tersimpan meskipun disabled
                         Select::make('role_id')
                             ->label('Peran')
                             ->relationship('role', 'name')
@@ -63,11 +86,8 @@ class UserResource extends Resource
                         TextInput::make('password')
                             ->label('Password')
                             ->password()
-                            // Hanya wajib diisi saat membuat pengguna baru
                             ->required(fn(string $operation): bool => $operation === 'create')
-                            // Hash password secara otomatis sebelum disimpan
                             ->dehydrateStateUsing(fn(string $state): string => Hash::make($state))
-                            // Jangan ikut sertakan field ini dalam data jika kosong (agar tidak menimpa password saat edit)
                             ->dehydrated(fn(?string $state): bool => filled($state))
                             ->maxLength(255),
                     ])->columns(2),
