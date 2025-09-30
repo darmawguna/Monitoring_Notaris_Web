@@ -1,22 +1,23 @@
 # ============================================
 # STAGE 1: Build Frontend Assets
 # ============================================
-FROM node:20-alpine AS assets
+FROM node:18-alpine AS assets
 
 WORKDIR /app
 
-# Copy package files
+# Install dependencies
 COPY package*.json ./
 RUN npm ci
 
-# Copy source files needed for build
+# Copy all needed source files & configs
 COPY vite.config.js ./
+COPY tailwind.config.js ./   
+COPY postcss.config.js ./    
 COPY resources ./resources
-COPY public ./public
+# Tidak perlu menyalin 'public' karena build akan men-generate isinya
 
-# Build assets (output ke public/build)
+# Build assets
 RUN npm run build
-
 # ============================================
 # STAGE 2: PHP Dependencies & Optimization
 # ============================================
@@ -65,13 +66,6 @@ COPY --from=assets /app/public/build ./public/build
 
 # Generate optimized autoloader (now artisan exists)
 RUN composer dump-autoload --optimize
-
-# Run Laravel optimizations
-RUN php artisan config:cache \
- && php artisan route:cache \
- && php artisan view:cache \
- && php artisan event:cache \
- && php artisan filament:cache-components
 
 # ============================================
 # STAGE 3: Production Runtime
