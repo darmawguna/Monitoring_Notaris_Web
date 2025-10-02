@@ -21,6 +21,7 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 use App\Filament\Widgets\StatsOverview;
 use App\Filament\Widgets\BerkasTerbaru;
 use App\Filament\Widgets\KwitansiTerbaru;
+use App\Filament\Widgets\PerbankanWidget;
 use Filament\Support\Facades\FilamentView;
 
 // TODO lakukan stress test untuk mengukur kekuatan dari sistem
@@ -48,6 +49,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
+                PerbankanWidget::class,
                 StatsOverview::class,
                 BerkasTerbaru::class,
                 KwitansiTerbaru::class,

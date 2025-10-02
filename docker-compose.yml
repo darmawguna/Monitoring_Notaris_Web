@@ -33,8 +33,6 @@ services:
       APP_ENV: production
       APP_DEBUG: "false"
       LOG_CHANNEL: stderr
-      # Pastikan koneksi queue diset (lihat .env di bawah)
-      # QUEUE_CONNECTION: database
     depends_on:
       db:
         condition: service_healthy
@@ -43,22 +41,29 @@ services:
     volumes:
       - ./storage/app:/var/www/html/storage/app
       - ./storage/logs:/var/www/html/storage/logs
-    # Jalankan worker foreground sebagai PID 1
-    command: >
-      sh -lc 'php artisan queue:work
-        --queue=default
-        --sleep=3
-        --tries=3
-        --backoff=5
-        --timeout=120
-        --memory=256'
-    # Healthcheck: proses queue:work harus hidup
+
+    # Penting: jalankan dari folder yang ada artisan
+    working_dir: /var/www/html
+
+    # Array form — tidak lewat shell
+    command:
+      - php
+      - artisan
+      - queue:work
+      - --queue=default
+      - --sleep=3
+      - --tries=3
+      - --backoff=5
+      - --timeout=120
+      - --memory=256
+
     healthcheck:
       test: ["CMD-SHELL", "pgrep -f 'artisan queue:work' >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 20s
+
 
   db:
     image: mysql:8.0
