@@ -4,9 +4,9 @@ namespace App\Enums;
 
 enum StageKey: string
 {
-    case FRONT_OFFICE = 'front_office';
-    case PETUGAS_2 = 'petugas 2';
-    case PAJAK = 'petugas pajak';
-    case PETUGAS_5 = 'petugas 4';
+    case PETUGAS_ENTRY = 'petugas_entry';
+    case PETUGAS_PENGETIKAN = 'petugas pengetikan';
+    case PETUGAS_PAJAK = 'petugas pajak';
+    case PETUGAS_PENYIAPAN = 'petugas penyiapan';
     case SELESAI = 'selesai';
 }

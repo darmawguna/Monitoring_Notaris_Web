@@ -14,10 +14,11 @@ class RoleSeeder extends Seeder
     {
         $roles = [
             ['name' => 'Superadmin', 'description' => 'Akses penuh ke semua fitur sistem.'],
-            ['name' => 'FrontOffice', 'description' => 'Mengelola input berkas baru.'],
-            ['name' => 'Petugas2', 'description' => 'Memproses berkas tahap kedua.'],
-            ['name' => 'Pajak', 'description' => 'Memproses berkas terkait pajak.'],
-            ['name' => 'Petugas5', 'description' => 'Memproses berkas tahap akhir.'],
+            ['name' => 'Petugas Entry', 'description' => 'Mengelola input berkas baru.'],
+            ['name' => 'Petugas Pengetikan', 'description' => 'Memproses berkas tahap kedua.'],
+            ['name' => 'Petugas Pajak', 'description' => 'Memproses berkas terkait pajak.'],
+            ['name' => 'Petugas Penyiapan', 'description' => 'Memproses berkas tahap akhir.'],
+            ['name' => 'Petugas BPN', 'description' => 'Memproses berkas tahap akhir.'],
         ];
 
         foreach ($roles as $role) {

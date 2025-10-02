@@ -15,10 +15,10 @@ class DeadlineConfigSeeder extends Seeder
     public function run(): void
     {
         $configs = [
-            ['stage_key' => StageKey::FRONT_OFFICE, 'default_days' => 2],
-            ['stage_key' => StageKey::PETUGAS_2, 'default_days' => 3],
-            ['stage_key' => StageKey::PAJAK, 'default_days' => 5],
-            ['stage_key' => StageKey::PETUGAS_5, 'default_days' => 3],
+            ['stage_key' => StageKey::PETUGAS_ENTRY, 'default_days' => 2],
+            ['stage_key' => StageKey::PETUGAS_PENGETIKAN, 'default_days' => 3],
+            ['stage_key' => StageKey::PETUGAS_PAJAK, 'default_days' => 5],
+            ['stage_key' => StageKey::PETUGAS_PENYIAPAN, 'default_days' => 3],
         ];
 
         foreach ($configs as $config) {
