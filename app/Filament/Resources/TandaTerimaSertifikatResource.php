@@ -9,6 +9,7 @@ use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
+use Illuminate\Database\Eloquent\Model;
 use Filament\Infolists\Components\Actions\Action as InfolistAction;
 use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
@@ -31,6 +32,23 @@ class TandaTerimaSertifikatResource extends Resource
     protected static ?string $pluralModelLabel = 'Tanda Terima Sertifikat';
     protected static ?string $navigationLabel = 'Tanda Terima Sertifikat';
     protected static ?string $navigationGroup = 'Berkas';
+    protected static ?string $recordTitleAttribute = 'nomor_berkas';
+
+    /**
+     * Izinkan pencarian berdasarkan nomor berkas, penyerah, dan penerima.
+     */
+    protected static array $globallySearchableAttributes = [
+        'nomor_berkas',
+        'penyerah',
+        'penerima'
+    ];
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        return [
+            'Penyerah' => $record->penyerah,
+            'Penerima' => $record->penerima,
+        ];
+    }
     public static function canViewAny(): bool
     {
         $user = auth()->user();
@@ -50,6 +68,11 @@ class TandaTerimaSertifikatResource extends Resource
             ->schema([
                 Section::make('Informasi Tanda Terima')
                     ->schema([
+                        TextInput::make('nomor_berkas')
+                            ->label('Nomor Berkas')
+                            ->placeholder('Akan digenerate otomatis setelah disimpan')
+                            ->readOnly()
+                            ->columnSpanFull(),
                         TextInput::make('penyerah')
                             ->label('Yang Menyerahkan Sertifikat (Sertifikat Awal)')
                             ->required()
@@ -96,6 +119,7 @@ class TandaTerimaSertifikatResource extends Resource
             ->schema([
                 InfolistSection::make('Informasi Tanda Terima')
                     ->schema([
+                        TextEntry::make('nomor_berkas'),
                         TextEntry::make('penyerah'),
                         TextEntry::make('penerima'),
                         TextEntry::make('tanggal_terima')->date('d F Y'),
@@ -131,6 +155,10 @@ class TandaTerimaSertifikatResource extends Resource
     {
         return $table
             ->columns([
+                TextColumn::make('nomor_berkas')
+                    ->label('Nomor Berkas')
+                    ->searchable()
+                    ->sortable(),
                 TextColumn::make('penyerah')
                     ->label('Yang Menyerahkan')
                     ->searchable(),

@@ -14,55 +14,61 @@ class UserSeeder extends Seeder
      */
     public function run(): void
     {
-        // Kumpulan data pengguna yang akan kita buat
+        // --- PERUBAHAN 1: Definisikan domain Anda di sini ---
+        // Ambil domain dari .env, atau gunakan domain yang Anda berikan sebagai fallback
+        $domain = env('USER_EMAIL_DOMAIN', 'lightslategray-bat-503082.hostingersite.com');
+
         $usersData = [
             [
-                'name' => 'Hendy (Superadmin)',
-                'email' => 'superadmin@example.com',
+                'name' => 'Superadmin',
+                'email_prefix' => 'superadmin', // Gunakan prefix, bukan email lengkap
                 'password' => 'password',
                 'roleName' => 'Superadmin',
             ],
             [
                 'name' => 'Petugas Front Office',
-                'email' => 'frontoffice@example.com',
+                'email_prefix' => 'frontoffice',
                 'password' => 'password',
                 'roleName' => 'FrontOffice',
             ],
             [
                 'name' => 'Petugas Dua A',
-                'email' => 'petugas2a@example.com',
+                'email_prefix' => 'petugas2a',
                 'password' => 'password',
                 'roleName' => 'Petugas2',
             ],
             [
                 'name' => 'Petugas Dua B',
-                'email' => 'petugas2b@example.com',
+                'email_prefix' => 'petugas2b',
                 'password' => 'password',
                 'roleName' => 'Petugas2',
             ],
             [
                 'name' => 'Petugas Pajak',
-                'email' => 'pajak@example.com',
+                'email_prefix' => 'pajak',
                 'password' => 'password',
                 'roleName' => 'Pajak',
             ],
             [
                 'name' => 'Petugas Lima',
-                'email' => 'petugas5@example.com',
+                'email_prefix' => 'petugas5',
                 'password' => 'password',
                 'roleName' => 'Petugas5',
             ],
         ];
 
         foreach ($usersData as $userData) {
-            // 1. Cari role berdasarkan nama, bukan ID
+            // 1. Cari role berdasarkan nama
             $role = Role::where('name', $userData['roleName'])->first();
 
             // 2. Jika role ditemukan, buat user
             if ($role) {
-                // Gunakan firstOrCreate untuk menghindari duplikat jika seeder dijalankan lagi
+                // --- PERUBAHAN 2: Gabungkan prefix dengan domain ---
+                $email = $userData['email_prefix'] . '@' . $domain;
+
+                // Gunakan firstOrCreate untuk menghindari duplikat
                 User::firstOrCreate(
-                    ['email' => $userData['email']], // Kondisi untuk mengecek
+                    ['email' => $email], // Kondisi untuk mengecek
                     [
                         'name' => $userData['name'],
                         'password' => Hash::make($userData['password']), // Enkripsi password

@@ -12,6 +12,7 @@ class TandaTerimaSertifikat extends Model
 
     protected $fillable = [
         'penyerah',
+        'nomor_berkas',
         'penerima',
         'tanggal_terima',
         'tanggal_menyerahkan',

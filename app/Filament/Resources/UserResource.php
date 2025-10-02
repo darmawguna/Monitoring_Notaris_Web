@@ -52,20 +52,18 @@ class UserResource extends Resource
                             ->label('Nama Lengkap')
                             ->required()
                             ->maxLength(255)
-                            // 1. Jadikan field nama reaktif, update saat fokus hilang (onBlur)
                             ->live(onBlur: true)
-                            // 2. Setelah nama diisi, jalankan logika untuk membuat email
-                            ->afterStateUpdated(function (Get $get, Set $set) {
+                            ->afterStateUpdated(function (string $operation, Get $get, Set $set) {
+                                // Tambahkan pengecekan ini untuk keamanan tambahan
+                                // Hanya jalankan saat membuat record baru
+                                if ($operation !== 'create') {
+                                    return;
+                                }
+
                                 $name = $get('name');
                                 if ($name) {
-                                    // Ambil domain dari file .env, dengan fallback default
                                     $domain = env('USER_EMAIL_DOMAIN', 'notarisflow.com');
-
-                                    // Buat format email: nama.tanpa.spasi@domain.com
-                                    // Contoh: "Darma Wiguna" -> "darma.wiguna"
                                     $emailName = Str::slug($name, '.');
-
-                                    // Set nilai field 'email'
                                     $set('email', strtolower($emailName) . '@' . $domain);
                                 }
                             }),
@@ -73,10 +71,11 @@ class UserResource extends Resource
                             ->email()
                             ->required()
                             ->maxLength(255)
+                            ->helperText("email akan digenerate berdasarkan nama user")
                             ->unique(ignoreRecord: true)
-                            // 3. Buat field email menjadi tidak bisa diedit
-                            ->disabled()
-                            ->dehydrated(), // Pastikan tetap tersimpan meskipun disabled
+                            // --- PERBAIKAN DI SINI ---
+                            // Ganti disabled() dengan readOnly() untuk perilaku yang lebih stabil
+                            ->readOnly(),
                         Select::make('role_id')
                             ->label('Peran')
                             ->relationship('role', 'name')
@@ -86,6 +85,7 @@ class UserResource extends Resource
                         TextInput::make('password')
                             ->label('Password')
                             ->password()
+                            ->revealable()
                             ->required(fn(string $operation): bool => $operation === 'create')
                             ->dehydrateStateUsing(fn(string $state): string => Hash::make($state))
                             ->dehydrated(fn(?string $state): bool => filled($state))

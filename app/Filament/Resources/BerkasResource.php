@@ -50,6 +50,27 @@ class BerkasResource extends Resource
 
     protected static ?string $navigationLabel = 'Berkas Peralihan Hak';
     protected static ?string $navigationGroup = 'Berkas';
+    protected static ?string $recordTitleAttribute = 'nomor_berkas';
+
+    /**
+     * Izinkan pencarian berdasarkan nomor berkas, jenis berkas, dan nama pemohon.
+     */
+    protected static array $globallySearchableAttributes = [
+        'nomor_berkas',
+        'nama_berkas',
+        'nama_pemohon'
+    ];
+
+    /**
+     * Tampilkan detail tambahan di hasil pencarian.
+     */
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        return [
+            'Jenis Berkas' => $record->nama_berkas,
+            'Pemohon' => $record->nama_pemohon,
+        ];
+    }
 
     public static function getEloquentQuery(): Builder
     {
@@ -92,21 +113,6 @@ class BerkasResource extends Resource
     {
         return auth()->user()->role->name === 'Superadmin';
     }
-
-    /**
-     * The column to use as the main title in global search results.
-     */
-    protected static ?string $recordTitleAttribute = 'nama_berkas';
-
-    /**
-     * The columns that should be searched globally.
-     */
-    protected static array $globallySearchableAttributes = [
-        'nomor',
-        'nama_berkas',
-        'penjual',
-        'pembeli',
-    ];
 
 
     public static function form(Form $form): Form

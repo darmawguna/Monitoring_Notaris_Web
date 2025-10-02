@@ -12,6 +12,7 @@ return new class extends Migration {
     {
         Schema::create('tanda_terima_sertifikats', function (Blueprint $table) {
             $table->id();
+            $table->string('nomor_berkas')->nullable();
             $table->string('penyerah'); // Yang menyerahkan sertifikat
             $table->string('penerima'); // Yang menerima sertifikat
             $table->date('tanggal_terima');
