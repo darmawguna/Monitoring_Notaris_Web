@@ -1,61 +1,56 @@
+version: "3.9"
 
 services:
   app:
     image: docker.io/darmawiguna/docuhub:latest
     container_name: docuhub_app
     restart: unless-stopped
+    # php-fpm listen 9000; biasanya diakses via nginx/caddy (reverse proxy) di host
     ports:
       - "127.0.0.1:9000:9000"
     env_file:
       - .env
     environment:
-      # Override untuk production
       APP_ENV: production
       APP_DEBUG: "false"
       LOG_CHANNEL: stderr
     volumes:
-      # Mount semua storage yang perlu persistent
+      # Persist storage yg memang perlu disimpan
       - ./storage/app:/var/www/html/storage/app
       - ./storage/logs:/var/www/html/storage/logs
-      # Jangan mount framework/ karena cache sudah di-build
     networks:
       - docuhub_network
     depends_on:
       db:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "php-fpm-healthcheck || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    # Tidak perlu healthcheck di sini; sudah ada di Dockerfile (pgrep php-fpm)
 
   db:
     image: mysql:8.0
     container_name: docuhub_db
     restart: unless-stopped
     environment:
+      # docker compose otomatis baca .env di root saat deploy
       MYSQL_DATABASE: ${DB_DATABASE}
       MYSQL_USER: ${DB_USERNAME}
       MYSQL_PASSWORD: ${DB_PASSWORD}
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-      # Optimasi MySQL untuk production
       MYSQL_INITDB_SKIP_TZINFO: 1
     volumes:
       - db_data:/var/lib/mysql
       - ./docker/mysql/my.cnf:/etc/mysql/conf.d/custom.cnf:ro
     ports:
-      # Fixed: MySQL default port adalah 3306
-      - "127.0.0.1:3309:3306" 
+      - "127.0.0.1:3309:3306"
     networks:
       - docuhub_network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${DB_USERNAME}", "-p${DB_PASSWORD}"]
+      # gunakan ping ke localhost tanpa perlu ekspansi var
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${DB_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 30s
-    command: 
+    command:
       - --default-authentication-plugin=mysql_native_password
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
