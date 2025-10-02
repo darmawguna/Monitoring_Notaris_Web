@@ -137,8 +137,7 @@ class BerkasResource extends Resource
                         TextInput::make('nama_pemohon')
                             ->required()
                             ->maxLength(255),
-                        TextInput::make('pbb_sppt')->label('SPPT'),
-                        TextInput::make('pbb_nop')->label('NOP'),
+
                     ])->columns(3),
 
                 // SECTION BERKAS JUAL BELI
@@ -232,7 +231,7 @@ class BerkasResource extends Resource
                     ->schema([
                         TextInput::make('pbb_validasi')->label('Validasi PBB'),
                         TextInput::make('pbb_akta_bpjb')->label('Akta PPJB'),
-                        TextInput::make('pbb_nomor')->label('Nomor PBB'),
+                        TextInput::make('pbb_nop')->label('NOP'),
                     ])->columns(3),
 
 

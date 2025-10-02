@@ -23,14 +23,16 @@ jobs:
           script: |
             set -euo pipefail
 
-            # Color output
+            # === Pretty colors ===
             RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 
             PROJECT_DIR="/home/projectdarma/Monitoring_Notaris_Web"
+
+            echo -e "${GREEN}===> Starting deployment${NC}"
             cd "$PROJECT_DIR"
 
-            echo -e "${YELLOW}===> Loading .env into shell (for backup)${NC}"
-            # Export var dari .env agar bisa dipakai di perintah shell berikutnya
+            echo -e "${YELLOW}===> Loading .env into shell (for backup & commands)${NC}"
+            # Export variables from .env for current shell session
             set -o allexport
             if [ -f .env ]; then
               # shellcheck disable=SC2046
@@ -38,60 +40,73 @@ jobs:
             fi
             set +o allexport
 
-            echo -e "${GREEN}===> Starting deployment${NC}"
-
-            # Pull image terbaru (mengikuti tag di compose)
-            echo -e "${YELLOW}===> Pulling latest image${NC}"
+            echo -e "${YELLOW}===> Pulling latest images${NC}"
             docker compose pull app
+            docker compose pull queue || true   # queue service exists in compose
 
-            # Backup database sebelum deploy (idempotent)
+            # Optional DB backup before rollout (if db service exists)
             if docker compose ps db >/dev/null 2>&1; then
               echo -e "${YELLOW}===> Creating database backup${NC}"
               TS=$(date +%Y%m%d_%H%M%S)
               docker compose exec -T db mysqldump -uroot -p"${DB_ROOT_PASSWORD:-root}" "${DB_DATABASE:-laravel}" > "backup_${TS}.sql" || true
             fi
 
-            # Stop + start app (graceful rollout)
-            echo -e "${YELLOW}===> Restarting app container${NC}"
-            docker compose up -d app
+            echo -e "${YELLOW}===> Recreating containers${NC}"
+            docker compose up -d app queue
 
-            # Tunggu sampai sehat (pakai docker inspect Health)
             echo -e "${YELLOW}===> Waiting for app healthcheck${NC}"
-            TIMEOUT_AT=$(( $(date +%s) + 60 ))
-            until [ "$(docker inspect -f '{{.State.Health.Status}}' docuhub_app 2>/dev/null || echo 'starting')" = "healthy" ]; do
-              [ "$(date +%s)" -gt "$TIMEOUT_AT" ] && { echo -e "${RED}Health check timeout${NC}"; docker compose logs app --tail=80; exit 1; }
+            APP_NAME="docuhub_app"
+            TIMEOUT_AT=$(( $(date +%s) + 90 ))
+            until [ "$(docker inspect -f '{{.State.Health.Status}}' ${APP_NAME} 2>/dev/null || echo 'starting')" = "healthy" ]; do
+              [ "$(date +%s)" -gt "$TIMEOUT_AT" ] && { echo -e "${RED}App health check timeout${NC}"; docker compose logs app --tail=120 || true; exit 1; }
               sleep 2
             done
 
-            # Migrasi + storage link + cache
-            echo -e "${YELLOW}===> Running migrations${NC}"
+            echo -e "${YELLOW}===> Waiting for queue healthcheck${NC}"
+            QUEUE_NAME="docuhub_queue"
+            if docker ps --format '{{.Names}}' | grep -q "^${QUEUE_NAME}$"; then
+              TIMEOUT_AT=$(( $(date +%s) + 90 ))
+              until [ "$(docker inspect -f '{{.State.Health.Status}}' ${QUEUE_NAME} 2>/dev/null || echo 'starting')" = "healthy" ]; do
+                [ "$(date +%s)" -gt "$TIMEOUT_AT" ] && { echo -e "${RED}Queue health check timeout${NC}"; docker compose logs queue --tail=120 || true; exit 1; }
+                sleep 2
+              done
+            else
+              echo -e "${YELLOW}Queue service not found; skipping queue health wait${NC}"
+            fi
+
+            echo -e "${YELLOW}===> Running database migrations${NC}"
             docker compose exec -T app php artisan migrate --force
 
-            echo -e "${YELLOW}===> Creating storage symlink${NC}"
+            echo -e "${YELLOW}===> Ensuring queue tables exist (idempotent)${NC}"
+            docker compose exec -T app php -r "
+            try {
+              \$dsn = 'mysql:host='.(getenv('DB_HOST')?:'db').';port='.(getenv('DB_PORT')?:'3306').';dbname='.(getenv('DB_DATABASE')?:'laravel');
+              \$pdo = new PDO(\$dsn, getenv('DB_USERNAME')?:'root', getenv('DB_PASSWORD')?:'');
+              \$tables = array_map('strtolower', array_column(\$pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_NUM), 0));
+              if (!in_array('jobs', \$tables)) {
+                passthru('php artisan queue:table', \$code); if (\$code) exit(\$code);
+                passthru('php artisan migrate --force', \$code); if (\$code) exit(\$code);
+              } else {
+                echo \"Queue tables already exist\n\";
+              }
+            } catch (Throwable \$e) { fwrite(STDERR, \$e->getMessage().\"\\n\"); exit(1); }"
+
+            echo -e "${YELLOW}===> Creating storage symlink (idempotent)${NC}"
             docker compose exec -T app php artisan storage:link || true
 
-            echo -e "${YELLOW}===> Clearing/recaching config${NC}"
+            echo -e "${YELLOW}===> Clearing & caching configuration${NC}"
             docker compose exec -T app php artisan cache:clear || true
             docker compose exec -T app php artisan config:clear || true
             docker compose exec -T app php artisan config:cache || true
 
-            # Reload Caddy (opsional, kalau kamu reverse proxy via Caddy host)
-            echo -e "${YELLOW}===> Reloading Caddy (if installed)${NC}"
+            echo -e "${YELLOW}===> Reloading Caddy (if present)${NC}"
             sudo systemctl reload caddy || true
 
-            # Cleanup images lama (hemat disk)
-            echo -e "${YELLOW}===> Cleaning up old Docker images${NC}"
+            echo -e "${YELLOW}===> Cleaning up old Docker images (>24h)${NC}"
             docker image prune -af --filter "until=24h" || true
 
-            # Simpan hanya 5 backup terakhir
-            echo -e "${YELLOW}===> Cleaning old backups${NC}"
+            echo -e "${YELLOW}===> Keeping only last 5 DB backups${NC}"
             ls -t backup_*.sql 2>/dev/null | tail -n +6 | xargs rm -f || true
 
             echo -e "${GREEN}===> Deployment completed successfully!${NC}"
             docker compose ps
-
-      - name: Notify on failure
-        if: failure()
-        run: |
-          echo "Deployment failed! Check the logs above."
-          exit 1

@@ -34,11 +34,11 @@ return new class extends Migration {
            
 
             // Tambahkan kolom untuk Section PBB
-            $table->string('pbb_sppt')->after('nilai_transaksi')->nullable();
-            $table->string('pbb_nop')->after('pbb_sppt')->nullable();
+            // $table->string('pbb_sppt')->after('nilai_transaksi')->nullable();
+            $table->string('pbb_nop')->after('nilai_transaksi')->nullable();
             $table->string('pbb_validasi')->after('pbb_nop')->nullable();
             $table->string('pbb_akta_bpjb')->after('pbb_validasi')->nullable();
-            $table->string('pbb_nomor')->after('pbb_akta_bpjb')->nullable();
+            // $table->string('pbb_nomor')->after('pbb_akta_bpjb')->nullable();
 
             // Tambahkan kolom untuk Section Bank
         });

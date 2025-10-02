@@ -5,9 +5,8 @@ services:
     image: docker.io/darmawiguna/docuhub:latest
     container_name: docuhub_app
     restart: unless-stopped
-    # php-fpm listen 9000; biasanya diakses via nginx/caddy (reverse proxy) di host
     ports:
-      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9000:9000"   # php-fpm
     env_file:
       - .env
     environment:
@@ -15,7 +14,6 @@ services:
       APP_DEBUG: "false"
       LOG_CHANNEL: stderr
     volumes:
-      # Persist storage yg memang perlu disimpan
       - ./storage/app:/var/www/html/storage/app
       - ./storage/logs:/var/www/html/storage/logs
     networks:
@@ -23,14 +21,50 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    # Tidak perlu healthcheck di sini; sudah ada di Dockerfile (pgrep php-fpm)
+    # healthcheck sudah ada di Dockerfile (pgrep php-fpm)
+
+  queue:
+    image: docker.io/darmawiguna/docuhub:latest
+    container_name: docuhub_queue
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      LOG_CHANNEL: stderr
+      # Pastikan koneksi queue diset (lihat .env di bawah)
+      # QUEUE_CONNECTION: database
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - docuhub_network
+    volumes:
+      - ./storage/app:/var/www/html/storage/app
+      - ./storage/logs:/var/www/html/storage/logs
+    # Jalankan worker foreground sebagai PID 1
+    command: >
+      sh -lc 'php artisan queue:work
+        --queue=default
+        --sleep=3
+        --tries=3
+        --backoff=5
+        --timeout=120
+        --memory=256'
+    # Healthcheck: proses queue:work harus hidup
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'artisan queue:work' >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
   db:
     image: mysql:8.0
     container_name: docuhub_db
     restart: unless-stopped
     environment:
-      # docker compose otomatis baca .env di root saat deploy
       MYSQL_DATABASE: ${DB_DATABASE}
       MYSQL_USER: ${DB_USERNAME}
       MYSQL_PASSWORD: ${DB_PASSWORD}
@@ -44,7 +78,6 @@ services:
     networks:
       - docuhub_network
     healthcheck:
-      # gunakan ping ke localhost tanpa perlu ekspansi var
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${DB_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
