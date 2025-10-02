@@ -6,6 +6,7 @@ export default {
         "./vendor/filament/**/*.blade.php",
         // Tambahkan path ke file error kustom Anda
         "./resources/views/errors/**/*.blade.php",
+        "./vendor/filament/**/*.blade.php",
     ],
     theme: {
         extend: {},

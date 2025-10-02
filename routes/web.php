@@ -6,9 +6,7 @@ use App\Http\Controllers\TandaTerimaController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\FileController;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::redirect('/', '/admin');
 
 
 Route::get('/files/{appFile}/download', [FileController::class, 'download'])

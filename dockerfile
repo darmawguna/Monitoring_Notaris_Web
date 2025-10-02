@@ -1,134 +1,129 @@
-# ============================================
-# STAGE 1: Build Frontend Assets
-# ============================================
-FROM node:18-alpine AS assets
+# =========================
+# 1) Base PHP (Alpine) + extensions for Laravel 12 + Filament v3
+# =========================
+FROM php:8.2-fpm-alpine AS php_base
 
-WORKDIR /app
+ENV COMPOSER_ALLOW_SUPERUSER=1 \
+    APP_ENV=production \
+    PHP_OPCACHE_VALIDATE_TIMESTAMPS=0
 
-# Install dependencies
-COPY package*.json ./
-RUN npm ci
+# Runtime deps
+RUN apk add --no-cache \
+    git curl zip unzip tzdata bash shadow \
+    icu-libs icu-data-full \
+    libzip freetype libpng libjpeg-turbo
 
-# Copy all needed source files & configs
-COPY vite.config.js ./
-COPY tailwind.config.js ./   
-COPY postcss.config.js ./    
-COPY resources ./resources
-# Tidak perlu menyalin 'public' karena build akan men-generate isinya
+# Build deps (hapus setelah compile extension)
+RUN apk add --no-cache --virtual .build-deps \
+    $PHPIZE_DEPS icu-dev libzip-dev \
+    freetype-dev libpng-dev libjpeg-turbo-dev
 
-# Build assets
-RUN npm run build
-# ============================================
-# STAGE 2: PHP Dependencies & Optimization
-# ============================================
-FROM php:8.2-fpm-alpine AS builder
+# PHP extensions (Filament/PhpWord/Laravel)
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+ && docker-php-ext-install -j"$(nproc)" \
+    bcmath exif intl gd pdo_mysql zip opcache
+
+# Opcache tuning (production)
+RUN { \
+      echo 'opcache.enable=1'; \
+      echo 'opcache.enable_cli=0'; \
+      echo 'opcache.jit_buffer_size=0'; \
+      echo 'opcache.memory_consumption=256'; \
+      echo 'opcache.interned_strings_buffer=32'; \
+      echo 'opcache.max_accelerated_files=20000'; \
+      echo 'opcache.validate_timestamps=${PHP_OPCACHE_VALIDATE_TIMESTAMPS}'; \
+   } > /usr/local/etc/php/conf.d/opcache.ini
+
+# Bersihkan build deps agar base lebih ramping
+RUN apk del .build-deps
+
+# Samakan UID/GID (opsional)
+ARG PUID=1000
+ARG PGID=1000
+RUN usermod -u "${PUID}" www-data && groupmod -g "${PGID}" www-data
 
 WORKDIR /var/www/html
 
-# Install PHP extensions dan dependencies
-RUN apk add --no-cache \
-    libzip-dev zip unzip \
-    libpng-dev libjpeg-turbo-dev freetype-dev \
-    icu-dev libxml2-dev oniguruma-dev \
-    git
-
-# Configure & install PHP extensions
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
- && docker-php-ext-install -j$(nproc) \
-    pdo_mysql \
-    zip \
-    gd \
-    intl \
-    bcmath \
-    opcache \
-    mbstring
-
-# Install Composer
+# Tambahkan composer binary ke base image
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Copy dependency files
-COPY composer.json composer.lock ./
 
-# Install dependencies (no dev, no scripts yet)
-RUN composer install \
-    --no-dev \
-    --no-interaction \
-    --no-progress \
-    --optimize-autoloader \
-    --no-scripts \
-    --prefer-dist
+# =========================
+# 2) Node/Vite build (DEBIAN, stabil)
+# =========================
+FROM node:20-bookworm AS assets
+WORKDIR /app
 
-# Copy application code
-COPY . .
+# Matikan audit/fund
+RUN npm config set fund false && npm config set audit false
 
-# Copy built assets from Stage 1
-COPY --from=assets /app/public/build ./public/build
+# Install deps JS sesuai lock yang tersedia
+COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
+RUN if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; \
+    elif [ -f yarn.lock ]; then corepack enable && yarn install --frozen-lockfile; \
+    elif [ -f pnpm-lock.yaml ]; then corepack enable && corepack prepare pnpm@9 --activate && pnpm i --frozen-lockfile; \
+    else npm i --no-audit --no-fund; fi
 
-# Generate optimized autoloader (now artisan exists)
-RUN composer dump-autoload --optimize
+# Sumber untuk build
+COPY resources ./resources
+COPY public ./public
+COPY vite.config.* ./
+COPY postcss.config.* ./
+COPY tailwind.config.* ./
 
-# ============================================
-# STAGE 3: Production Runtime
-# ============================================
-FROM php:8.2-fpm-alpine
+# Build produksi (Tailwind v3 tidak butuh binding native)
+RUN npm run build
 
+
+# =========================
+# 3) Composer deps (jalan di php_base yg sudah punya ext-intl)
+# =========================
+FROM php_base AS deps
+WORKDIR /app
+
+COPY composer.json composer.lock* ./
+RUN composer install --no-dev --prefer-dist --no-progress --no-interaction --no-scripts \
+ && composer dump-autoload --classmap-authoritative --no-interaction --no-scripts
+
+
+# =========================
+# 4) Production image (final)
+# =========================
+FROM php_base AS production
 WORKDIR /var/www/html
 
-# Install runtime dependencies only
-RUN apk add --no-cache \
-    supervisor \
-    libzip libpng libjpeg-turbo freetype \
-    icu-libs libxml2 oniguruma \
-    mysql-client \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) \
-        pdo_mysql zip gd intl bcmath opcache mbstring
+# Source code
+COPY . .
 
-# OPcache configuration for production
-RUN { \
-    echo 'opcache.enable=1'; \
-    echo 'opcache.enable_cli=0'; \
-    echo 'opcache.validate_timestamps=0'; \
-    echo 'opcache.revalidate_freq=0'; \
-    echo 'opcache.max_accelerated_files=20000'; \
-    echo 'opcache.memory_consumption=256'; \
-    echo 'opcache.interned_strings_buffer=16'; \
-    echo 'opcache.fast_shutdown=1'; \
-} > /usr/local/etc/php/conf.d/opcache.ini
+# Vendor dari stage deps
+COPY --from=deps /app/vendor ./vendor
 
-# PHP-FPM pool configuration
-RUN { \
-    echo '[www]'; \
-    echo 'pm = dynamic'; \
-    echo 'pm.max_children = 50'; \
-    echo 'pm.start_servers = 5'; \
-    echo 'pm.min_spare_servers = 5'; \
-    echo 'pm.max_spare_servers = 35'; \
-    echo 'pm.max_requests = 500'; \
-} > /usr/local/etc/php-fpm.d/zz-docker.conf
+# Asset build dari stage assets
+COPY --from=assets /app/public/build ./public/build
 
-# Copy optimized application from builder
-COPY --from=builder --chown=www-data:www-data /var/www/html /var/www/html
-
-# Copy supervisor config
-COPY docker/supervisor/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-# Create storage directories with correct permissions
-RUN mkdir -p \
-    storage/framework/cache \
-    storage/framework/sessions \
-    storage/framework/views \
-    storage/logs \
-    bootstrap/cache \
+# Permission & cache
+RUN mkdir -p storage/framework/{cache,sessions,views} \
+ && mkdir -p bootstrap/cache \
  && chown -R www-data:www-data storage bootstrap/cache \
- && chmod -R 775 storage bootstrap/cache
+ && find storage -type d -exec chmod 775 {} \; \
+ && find storage -type f -exec chmod 664 {} \; \
+ && chmod -R 775 bootstrap/cache \
+ && php artisan config:clear || true \
+ && php artisan route:clear || true \
+ && php artisan view:clear || true \
+ && php artisan config:cache || true \
+ && php artisan route:cache || true \
+ && php artisan view:cache || true
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
-  CMD php-fpm-healthcheck || exit 1
+# FPM status/ping (opsional; lindungi di reverse proxy)
+RUN { \
+    echo "[www]"; \
+    echo "pm.status_path = /status"; \
+    echo "ping.path = /ping"; \
+} > /usr/local/etc/php-fpm.d/zz-status.conf
 
 EXPOSE 9000
+HEALTHCHECK --interval=30s --timeout=5s --retries=5 CMD pgrep php-fpm || exit 1
 
 USER www-data
-
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+CMD ["php-fpm", "-F"]
