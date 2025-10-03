@@ -23,57 +23,98 @@ jobs:
           script: |
             set -euo pipefail
 
+            # ==== Konfigurasi dasar ====
             PROJECT_DIR="/home/projectdarma/Monitoring_Notaris_Web"
             COMPOSE_FILE="${PROJECT_DIR}/docker-compose.yml"
             APP_SVC="app"
             DB_SVC="db"
             APP_CONT="docuhub_app"
+            DB_CONT="docuhub_db"
 
             echo "===> cd to project"
             cd "$PROJECT_DIR" || { echo "Project dir not found: $PROJECT_DIR"; exit 1; }
             pwd
 
-            # (opsional) sync repo ke branch main
+            # (opsional) sinkronisasi repo ke main
             if [ -d .git ]; then
+              echo "===> Fetching origin"
               git fetch --all --prune || true
               git reset --hard origin/main || true
             fi
 
             echo "===> Compose services (from $COMPOSE_FILE):"
-            SERVICES="$(docker compose -f "$COMPOSE_FILE" config --services)"
+            SERVICES="$(docker compose -f "$COMPOSE_FILE" config --services 2>/dev/null || true)"
             echo "$SERVICES"
-
             has_service() { echo "$SERVICES" | grep -qx "$1"; }
 
             echo "===> Pull images"
-            docker compose -f "$COMPOSE_FILE" pull "$APP_SVC"
+            docker compose -f "$COMPOSE_FILE" pull "$APP_SVC" || true
             if has_service "$DB_SVC"; then
               docker compose -f "$COMPOSE_FILE" pull "$DB_SVC" || true
             fi
 
-            # Load .env for DB backup vars (jika ada)
-            set -o allexport
-            [ -f .env ] && export $(grep -v '^#' .env | xargs -d '\n') || true
-            set +o allexport
+            # ==== Helper: pembaca .env yang aman ====
+            get_env() {
+              # usage: get_env KEY
+              # baca dari .env; abaikan komentar & baris kosong; dukung value ber-quote
+              awk -F= -v k="$1" '
+                $0 !~ /^#/ && $0 ~ ("^"k"=") {
+                  sub("^"k"=", "", $0)
+                  val=$0
+                  sub(/^[[:space:]]+/, "", val); sub(/[[:space:]]+$/, "", val)
+                  if ((val ~ /^".*"$/) || (val ~ /^'\''.*'\''$/)) { val=substr(val,2,length(val)-2) }
+                  print val; exit
+                }
+              ' .env 2>/dev/null
+            }
 
+            DB_ROOT_PASSWORD_VAL="$(get_env DB_ROOT_PASSWORD || true)"
+            DB_DATABASE_VAL="$(get_env DB_DATABASE || true)"
+
+            # ==== Backup DB (jika ada service db & healthy) ====
             if has_service "$DB_SVC"; then
-              echo "===> DB backup"
-              TS=$(date +%Y%m%d_%H%M%S)
-              MYSQL_PWD="${DB_ROOT_PASSWORD:-root}" docker compose -f "$COMPOSE_FILE" exec -T "$DB_SVC" \
-                mysqldump -uroot "${DB_DATABASE:-laravel}" > "backup_${TS}.sql" || true
+              echo "===> Bring up DB (for backup) + wait healthy"
+              docker compose -f "$COMPOSE_FILE" up -d "$DB_SVC" --remove-orphans
+
+              DB_DEADLINE=$(( $(date +%s) + 180 ))
+              until [ "$(docker inspect -f '{{.State.Health.Status}}' "$DB_CONT" 2>/dev/null || echo starting)" = "healthy" ]; do
+                [ "$(date +%s)" -gt "$DB_DEADLINE" ] && { echo "DB not healthy, skip backup"; break; }
+                sleep 3
+              done
+
+              if [ "$(docker inspect -f '{{.State.Health.Status}}' "$DB_CONT" 2>/dev/null || echo starting)" = "healthy" ]; then
+                echo "===> DB backup"
+                TS=$(date +%Y%m%d_%H%M%S)
+                MYSQL_PWD="${DB_ROOT_PASSWORD_VAL:-root}" docker compose -f "$COMPOSE_FILE" exec -T "$DB_SVC" \
+                  mysqldump -uroot "${DB_DATABASE_VAL:-laravel}" > "backup_${TS}.sql" || true
+                # rotasi backup: simpan 5 terakhir
+                ls -t backup_*.sql 2>/dev/null | tail -n +6 | xargs -r rm -f || true
+              fi
             fi
 
-            echo "===> Up containers (db + app)"
+            echo "===> Up containers (db + app) with --remove-orphans"
             if has_service "$DB_SVC"; then
-              docker compose -f "$COMPOSE_FILE" up -d "$DB_SVC"
+              docker compose -f "$COMPOSE_FILE" up -d "$DB_SVC" --remove-orphans
             fi
-            docker compose -f "$COMPOSE_FILE" up -d "$APP_SVC"
+            docker compose -f "$COMPOSE_FILE" up -d "$APP_SVC" --remove-orphans
 
             echo "===> Wait app health"
-            APP_DEADLINE=$(( $(date +%s) + 120 ))
-            until [ "$(docker inspect -f '{{.State.Health.Status}}' "$APP_CONT" 2>/dev/null || echo starting)" = "healthy" ]; do
+            # Jika image app punya HEALTHCHECK, pakai inspect; kalau tidak, fallback pgrep php-fpm
+            APP_DEADLINE=$(( $(date +%s) + 180 ))
+            HEALTH="unknown"
+            while true; do
+              HEALTH="$(docker inspect -f '{{.State.Health.Status}}' "$APP_CONT" 2>/dev/null || echo "nohealth")"
+              if [ "$HEALTH" = "healthy" ]; then
+                break
+              fi
+              if [ "$HEALTH" = "nohealth" ]; then
+                # fallback: cek proses php-fpm di dalam container
+                if docker compose -f "$COMPOSE_FILE" exec -T "$APP_SVC" sh -lc "pgrep php-fpm >/dev/null"; then
+                  break
+                fi
+              fi
               [ "$(date +%s)" -gt "$APP_DEADLINE" ] && { docker compose -f "$COMPOSE_FILE" logs "$APP_SVC" --tail=200 || true; exit 1; }
-              sleep 2
+              sleep 3
             done
 
             echo "===> Run migrations & setup"
@@ -87,8 +128,11 @@ jobs:
             docker compose -f "$COMPOSE_FILE" exec -T "$APP_SVC" php artisan config:clear || true
             docker compose -f "$COMPOSE_FILE" exec -T "$APP_SVC" php artisan config:cache || true
 
+            echo "===> Reload Caddy (jika ada)"
             sudo systemctl reload caddy || true
-            docker image prune -af --filter "until=24h" || true
-            ls -t backup_*.sql 2>/dev/null | tail -n +6 | xargs rm -f || true
 
+            echo "===> Cleanup dangling images (older than 24h)"
+            docker image prune -af --filter "until=24h" || true
+
+            echo "===> Compose ps"
             docker compose -f "$COMPOSE_FILE" ps
