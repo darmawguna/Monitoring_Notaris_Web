@@ -10,8 +10,9 @@ use PhpOffice\PhpWord\TemplateProcessor;
 
 class KwitansiController extends Controller
 {
-    public function download(Receipt $receipt)
+    public function download($id)
     {
+        $receipt = Receipt::findOrFail($id);
         // (Opsional) otorisasi jika pakai policy
         // $this->authorize('view', $receipt);
 

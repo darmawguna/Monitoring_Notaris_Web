@@ -8,8 +8,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TurunWarisFileController extends Controller
 {
-    public function download(TurunWarisFile $turunWarisFile): StreamedResponse
+    public function download($id): StreamedResponse
     {
+        $turunWarisFile = TurunWarisFile::findOrFail($id);
         // Pastikan path file tidak kosong
         if (empty($turunWarisFile->path)) {
             abort(404, 'Data file tidak lengkap.');

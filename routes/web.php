@@ -19,9 +19,9 @@ Route::get('/berkas-files/{berkasFile}/download', [BerkasFileController::class, 
     ->name('berkas-files.download')
     ->middleware('auth');
 Route::get('/perbankan-files/{perbankanFile}/download', [PerbankanFileController::class, 'download'])->name('perbankan-files.download')->middleware('auth');
-Route::get('/turun-waris-files/{turunWarisFile}/download', [TurunWarisFileController::class, 'download'])->name('turun-waris-files.download')->middleware('auth');
+Route::get('/turun-waris-files/{id}/download', [TurunWarisFileController::class, 'download'])->name('turun-waris-files.download')->middleware('auth');
 
-Route::get('/kwitansi/{receipt}/download', [KwitansiController::class, 'download'])
+Route::get('/kwitansi/{id}/download', [KwitansiController::class, 'download'])
     ->name('kwitansi.download')
     ->middleware('auth');
 // Route::get('/SerahTerima/{tandaTerimaSertifikat}/download', [TandaTerimaController::class, 'download'])
@@ -33,9 +33,5 @@ Route::get('/tanda-terima/{record}/download-file', [TandaTerimaController::class
 
 
 use App\Http\Controllers\ClientTrackingController;
-// ... (use statements lain)
-
-// ... (rute lain yang sudah ada)
-
 // Rute untuk Halaman Pelacakan Klien
 Route::get('/lacak', [ClientTrackingController::class, 'index'])->name('client.tracking');
