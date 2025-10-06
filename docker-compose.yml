@@ -64,27 +64,6 @@ services:
   # ----------------------
   # Init permissions (run once, lalu exit sukses)
   # ----------------------
-  init_perms:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: production
-    depends_on:
-      db:
-        condition: service_healthy
-    env_file: [.env]
-    volumes:
-      - ./storage:/var/www/html/storage
-      - ./bootstrap/cache:/var/www/html/bootstrap/cache
-    command: >
-      sh -lc "
-      chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache &&
-      find /var/www/html/storage -type d -exec chmod 775 {} \; &&
-      find /var/www/html/storage -type f -exec chmod 664 {} \; &&
-      find /var/www/html/bootstrap/cache -type d -exec chmod 775 {} \; &&
-      find /var/www/html/bootstrap/cache -type f -exec chmod 664 {} \;"
-    networks: [docuhub_network]
-    restart: "no"
 
   # ----------------------
   # Sinkronisasi aset Vite (copy /public/build dari image → host ./public/build)
