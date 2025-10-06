@@ -18,7 +18,7 @@ services:
       - ./storage:/var/www/html/storage
       - ./bootstrap/cache:/var/www/html/bootstrap/cache
       # - ./:/var/www/html:ro   # hanya jika butuh baca kode dari host; aman karena read-only
-      - ./:/var/www/html   # hanya jika butuh baca kode dari host; aman karena read-only
+      # - ./:/var/www/html   # hanya jika butuh baca kode dari host; aman karena read-only
     networks:
       - docuhub_network
     depends_on:
