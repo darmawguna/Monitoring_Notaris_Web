@@ -139,17 +139,18 @@ class PerbankanResource extends Resource
                     ->schema([
                         Repeater::make('files') // Nama harus cocok dengan relasi di Model
                             ->label('Upload Berkas Bank')
-                            ->relationship() // Ini adalah kuncinya!
+                            ->relationship() // Ini akan secara otomatis terhubung ke PerbankanFile
                             ->schema([
-                                FileUpload::make('path') // Nama harus cocok dengan kolom di tabel 'app_files'
+                                FileUpload::make('path') // Nama kolom di tabel perbankan_files
                                     ->label('File')
                                     ->disk('public')
                                     ->directory('perbankan-attachments')
                                     ->preserveFilenames()
                                     ->required(),
                             ])
-                            ->maxItems(1) // Batasi agar hanya bisa upload 1 file
+                            ->maxItems(1) // Tetap batasi hanya satu file
                             ->addActionLabel('Tambah Berkas Bank'),
+
 
                         Select::make('jangka_waktu')
                             ->label('Jangka Waktu')
@@ -291,24 +292,9 @@ class PerbankanResource extends Resource
                                 return Str::is(['*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp'], strtolower($file->path));
                             }),
                         // Komponen untuk tombol Aksi (dengan logika yang diperbaiki)
-                        \Filament\Infolists\Components\Actions::make([
-                            Action::make('download')
-                                ->label('Download Berkas Bank')
-                                ->icon('heroicon-o-arrow-down-tray')
-                                ->color('success')
-                                // 1. Perbaiki logika URL
-                                ->url(function (Perbankan $record) {
-                                    // Dapatkan record file pertama dari relasi
-                                    $file = $record->files->first();
-                                    if ($file) {
-                                        // Kirim record AppFile yang benar ke rute
-                                        return route('files.download', ['appFile' => $file]);
-                                    }
-                                    return '#'; // URL fallback jika file tidak ada
-                                }, shouldOpenInNewTab: true)
-                                // 2. Perbaiki logika visibility
-                                ->visible(fn(Perbankan $record): bool => !$record->files->isEmpty()),
-                        ])->hiddenLabel(),
+                        ViewEntry::make('files')
+                            ->hiddenLabel() // Kita tidak perlu label di atasnya
+                            ->view('filament.infolists.components.perbankan-file-entry'),
                     ]),
 
                 // Opsional: Riwayat & Durasi (jika masih relevan)

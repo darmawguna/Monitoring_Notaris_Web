@@ -86,7 +86,7 @@
 <!-- --- PERUBAHAN 3: Perbarui Struktur HTML --- -->
 <div id="nf-topbar-title">
     <!-- Logo Kiri -->
-    <img src="{{ asset('images/notaris.png') }}" alt="Logo Kiri" class="nf-topbar-logo">
+    <img src="{{ asset('images/3.png') }}" alt="Logo Kiri" class="nf-topbar-logo">
 
     <!-- Blok Judul & Subjudul -->
     <div class="nf-topbar-text">
@@ -95,5 +95,5 @@
     </div>
 
     <!-- Logo Kanan -->
-    <img src="{{ asset('images/ppat.png') }}" alt="Logo Kanan" class="nf-topbar-logo">
+    <img src="{{ asset('images/4.png') }}" alt="Logo Kanan" class="nf-topbar-logo">
 </div>

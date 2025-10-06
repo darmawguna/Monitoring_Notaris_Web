@@ -91,43 +91,24 @@ class TurunWarisResource extends Resource
                             ->relationship()
                             ->label('Lampiran Berkas')
                             ->schema([
-                                Select::make('type')
-                                    ->label('Jenis Dokumen')
-                                    ->options([
-                                        'surat_kematian' => 'Surat Kematian',
-                                        'surat_nikah' => 'Surat Nikah',
-                                        'ktp_ahli_waris' => 'KTP Ahli Waris',
-                                        'kk_ahli_waris' => 'KK Ahli Waris',
-                                        'sertifikat' => 'Sertifikat',
-                                        'pbb' => 'PBB',
-                                        'lainnya' => 'Lainnya',
-                                    ])
-                                    ->required()
-                                    ->reactive(),
-                                FileUpload::make('path')
-                                    ->label('Upload File')
-                                    ->disk('public')
-                                    ->directory('berkas-attachments')
-                                    ->preserveFilenames()
-                                    ->required(),
-
-                                // 2. Tambahkan TextInput kondisional
-                                TextInput::make('type_lainnya')
-                                    ->label('Sebutkan Jenis Dokumen')
-                                    ->placeholder('Contoh: Surat Kuasa')
-                                    // 3. Atur visibilitas dan persyaratan
-                                    ->visible(fn(Get $get): bool => $get('type') === 'lainnya')
-                                    ->required(fn(Get $get): bool => $get('type') === 'lainnya'),
+                                Select::make('type')->label('Jenis Dokumen')->options(['surat_kematian' => 'Surat Kematian', 'surat_nikah' => 'Surat Nikah', 'ktp_ahli_waris' => 'KTP Ahli Waris', 'kk_ahli_waris' => 'KK Ahli Waris', 'sertifikat' => 'Sertifikat', 'pbb' => 'PBB', 'lainnya' => 'Lainnya'])->required()->reactive(),
+                                FileUpload::make('path')->label('Upload File')->disk('public')->directory('turun-waris-attachments')->preserveFilenames()->required(),
+                                TextInput::make('type_lainnya')->label('Sebutkan Jenis Dokumen')->placeholder('Contoh: Surat Kuasa')->visible(fn(Get $get): bool => $get('type') === 'lainnya')->required(fn(Get $get): bool => $get('type') === 'lainnya'),
                             ])
                             ->columns(2)
                             ->addActionLabel('Tambah Dokumen Lampiran')
-                            // 4. Perbarui logika penyimpanan data
-                            ->mutateRelationshipDataBeforeCreateUsing(function (array $data): array {
-                                // Jika pengguna memilih 'lainnya', gunakan input teks sebagai gantinya.
+                            ->mutateRelationshipDataBeforeFillUsing(function (array $data): array {
+                                $standardOptions = ['surat_kematian', 'surat_nikah', 'ktp_ahli_waris', 'kk_ahli_waris', 'sertifikat', 'pbb'];
+                                if (!in_array($data['type'], $standardOptions)) {
+                                    $data['type_lainnya'] = $data['type'];
+                                    $data['type'] = 'lainnya';
+                                }
+                                return $data;
+                            })
+                            ->mutateRelationshipDataBeforeSaveUsing(function (array $data): array {
                                 if ($data['type'] === 'lainnya' && isset($data['type_lainnya'])) {
                                     $data['type'] = $data['type_lainnya'];
                                 }
-                                // Hapus data sementara yang tidak perlu disimpan
                                 unset($data['type_lainnya']);
                                 return $data;
                             }),
@@ -185,69 +166,10 @@ class TurunWarisResource extends Resource
 
                 InfolistSection::make('Lampiran Berkas')
                     ->schema([
-                        RepeatableEntry::make('files')
+                        // Gunakan ViewEntry yang menunjuk ke file Blade baru
+                        ViewEntry::make('files')
                             ->hiddenLabel()
-                            ->schema([
-                                TextEntry::make('type')
-                                    ->label('Jenis Dokumen'),
-
-                                // --- INI BAGIAN YANG DIPERBARUI SECARA TOTAL ---
-
-                                // Komponen 1: Tampilkan thumbnail gambar (tidak bisa diklik)
-                                ImageEntry::make('path')
-                                    ->label('Pratinjau')
-                                    ->disk('public')
-                                    ->height(80)
-                                    ->visible(function ($record): bool {
-                                        if (!$record || !$record->path)
-                                            return false;
-                                        return Str::is(['*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp', '*.svg'], strtolower($record->path));
-                                    }),
-
-                                // Komponen 2: Fallback untuk file yang BUKAN gambar
-                                TextEntry::make('path')
-                                    ->label('File')
-                                    ->formatStateUsing(fn(?string $state): string => $state ? basename($state) : 'N/A')
-                                    ->url(fn($record) => $record->path ? Storage::url($record->path) : null, true)
-                                    ->color('primary')
-                                    ->visible(function ($record): bool {
-                                        if (!$record || !$record->path)
-                                            return false;
-                                        return !Str::is(['*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp', '*.svg'], strtolower($record->path));
-                                    }),
-
-                                // Komponen 3: Kolom Aksi Terpisah
-                                // TODO perbarui alignmentnya agar berada pada posisi yang sesuai.
-                                Actions::make([
-                                    // Aksi untuk membuka modal pratinjau
-                                    Action::make('preview')
-                                        ->label('Pratinjau')
-                                        ->icon('heroicon-o-eye')
-                                        ->modalContent(
-                                            fn($record) =>
-                                            Infolist::make()
-                                                ->record($record)
-                                                ->schema([
-                                                    ImageEntry::make('path')->hiddenLabel()->disk('public')->extraAttributes(['style' => 'display: block; max-width: 100%; height: auto; margin: auto;']),
-                                                ])
-                                        )
-                                        ->modalSubmitAction(false)
-                                        ->modalCancelAction(false) // Sembunyikan tombol default
-                                        ->visible(function ($record): bool {
-                                            if (!$record || !$record->path)
-                                                return false;
-                                            return Str::is(['*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp', '*.svg'], strtolower($record->path));
-                                        }),
-
-                                    // Aksi untuk mengunduh file
-                                    Action::make('download')
-                                        ->label('Unduh')
-                                        ->icon('heroicon-o-arrow-down-tray')
-                                        ->color('success')
-                                        ->url(fn($record) => route('files.download', ['appFile' => $record]), shouldOpenInNewTab: true)
-                                ])->label('Aksi')
-                                    ->alignment(Alignment::Center),
-                            ])->columns(3), // Ubah menjadi 3 kolom
+                            ->view('filament.infolists.components.turun-waris-file-list'),
                     ])->collapsible(),
 
                 InfolistSection::make('Riwayat & Durasi Pengerjaan')
