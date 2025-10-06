@@ -20,11 +20,11 @@ class CreatePerbankan extends CreateRecord
     protected function handleRecordCreation(array $data): Model
     {
         // Pisahkan data petugas dari data utama
-        $petugas2Id = $data['petugas_2_id'];
-        unset($data['petugas_2_id']);
+        $petugas2Id = $data['petugas_pengetikan_id'];
+        unset($data['petugas_pengetikan_id']);
 
         // Set tahap awal saat berkas dibuat
-        $data['current_stage_key'] = StageKey::PETUGAS_2;
+        $data['current_stage_key'] = StageKey::PETUGAS_PENGETIKAN;
 
         return static::getModel()::create($data);
     }
@@ -38,7 +38,7 @@ class CreatePerbankan extends CreateRecord
         // Tetapkan field-field default untuk record Perbankan
         $data['created_by'] = auth()->id();
         $data['status_overall'] = BerkasStatus::PROGRES;
-        $data['current_stage_key'] = StageKey::PETUGAS_2;
+        $data['current_stage_key'] = StageKey::PETUGAS_PENGETIKAN;
 
         // Kembalikan data yang sudah siap untuk disimpan ke tabel 'perbankans'
         return $data;
@@ -48,29 +48,29 @@ class CreatePerbankan extends CreateRecord
     {
         // 2. Buat catatan progres "done" untuk Front Office
         $this->record->progress()->create([
-            'stage_key' => StageKey::FRONT_OFFICE,
+            'stage_key' => StageKey::PETUGAS_ENTRY,
             'status' => 'done',
             'notes' => 'Berkas Perbankan diterima oleh Front Office.',
             'assignee_id' => auth()->id(),
             'completed_at' => now(),
         ]);
         // Deploy
-        $deadlineDays = DeadlineConfig::where('stage_key', StageKey::PETUGAS_2)->value('default_days') ?? 3;
+        $deadlineDays = DeadlineConfig::where('stage_key', StageKey::PETUGAS_PENGETIKAN)->value('default_days') ?? 3;
         $startedAt = now();
         $deadline = Carbon::parse($startedAt)->addDays($deadlineDays);
 
 
         // 3. Buat catatan progres "pending" untuk Petugas 2
         $this->record->progress()->create([
-            'stage_key' => StageKey::PETUGAS_2,
+            'stage_key' => StageKey::PETUGAS_PENGETIKAN,
             'status' => 'pending',
             'notes' => 'Berkas ditugaskan ke Petugas 2.',
-            'assignee_id' => $this->data['petugas_2_id'],
+            'assignee_id' => $this->data['petugas_pengetikan_id'],
             'deadline' => $deadline
         ]);
 
         // 4. Kirim notifikasi ke Petugas 2
-        $petugas2 = User::find($this->data['petugas_2_id']);
+        $petugas2 = User::find($this->data['petugas_pengetikan_id']);
         if ($petugas2) {
             Notification::make()
                 ->title('Anda menerima tugas Perbankan baru!')

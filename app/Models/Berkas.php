@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Berkas extends Model
 {
-    use HasFactory, HasProgress, HasFiles;
+    use HasFactory, HasProgress;
 
     protected $fillable = [
         'nomor_berkas',

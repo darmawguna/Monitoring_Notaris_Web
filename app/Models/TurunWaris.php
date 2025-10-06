@@ -12,7 +12,7 @@ use App\Enums\StageKey;
 
 class TurunWaris extends Model
 {
-    use HasFactory, HasProgress, HasFiles;
+    use HasFactory, HasProgress;
 
     protected $table = 'turun_waris';
 

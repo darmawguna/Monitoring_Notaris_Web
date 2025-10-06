@@ -25,7 +25,7 @@ class BerkasTerbaru extends BaseWidget
     public function getTableHeading(): string
     {
         // Judul bisa dibuat lebih spesifik
-        return 'Berkas Jual Beli Terbaru';
+        return 'Berkas Terbaru';
     }
 
     public function table(Tables\Table $table): Tables\Table

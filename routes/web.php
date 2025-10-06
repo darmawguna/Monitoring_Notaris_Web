@@ -3,6 +3,8 @@
 use App\Http\Controllers\BerkasFileController;
 use App\Http\Controllers\KwitansiController;
 use App\Http\Controllers\TandaTerimaController;
+use App\Http\Controllers\PerbankanFileController;
+use App\Http\Controllers\TurunWarisFileController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\FileController;
 
@@ -16,6 +18,8 @@ Route::get('/files/{appFile}/download', [FileController::class, 'download'])
 Route::get('/berkas-files/{berkasFile}/download', [BerkasFileController::class, 'download'])
     ->name('berkas-files.download')
     ->middleware('auth');
+Route::get('/perbankan-files/{perbankanFile}/download', [PerbankanFileController::class, 'download'])->name('perbankan-files.download')->middleware('auth');
+Route::get('/turun-waris-files/{turunWarisFile}/download', [TurunWarisFileController::class, 'download'])->name('turun-waris-files.download')->middleware('auth');
 
 Route::get('/kwitansi/{receipt}/download', [KwitansiController::class, 'download'])
     ->name('kwitansi.download')

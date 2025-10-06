@@ -134,12 +134,12 @@ class TurunWarisResource extends Resource
                     ]),
                 Section::make('Penugasan Awal')
                     ->schema([
-                        Select::make('petugas_2_id')
-                            ->label('Tugaskan ke Petugas 2')
+                        Select::make('petugas_pengetikan_id')
+                            ->label('Tugaskan ke Petugas Pengetikan')
                             ->options(
                                 User::whereHas(
                                     'role',
-                                    fn($query) => $query->where('name', 'Petugas2')
+                                    fn($query) => $query->where('name', 'Petugas Pengetikan')
                                 )->pluck('name', 'id')
                             )
                             ->searchable()

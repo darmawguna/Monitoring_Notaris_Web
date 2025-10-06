@@ -20,7 +20,6 @@ class Progress extends Model
         'notes',
         'deadline',
         'started_at',
-
         'completed_at',
         'assignee_id',          // <-- Tambahkan ini
     ];

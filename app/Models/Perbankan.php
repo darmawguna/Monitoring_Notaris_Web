@@ -7,6 +7,7 @@ use App\Enums\StageKey;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Models\Concerns\HasProgress;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany; // <-- Tambahkan ini
 
 class Perbankan extends Model
@@ -42,8 +43,9 @@ class Perbankan extends Model
     /**
      * Mendapatkan satu file yang terhubung dengan record Perbankan ini.
      */
-    public function files(): MorphMany
+    public function files(): HasMany
     {
-        return $this->morphMany(AppFile::class, 'fileable');
+        return $this->hasMany(PerbankanFile::class);
     }
+    
 }

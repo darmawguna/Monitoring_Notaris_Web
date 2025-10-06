@@ -135,8 +135,8 @@ class TugasResource extends Resource
                         // Logika form tetap sama, tapi sekarang mengambil data dari parent record
                         $parent = $record->progressable;
                         $nextRoleName = match ($parent->current_stage_key) {
-                            StageKey::PETUGAS_2 => 'Pajak',
-                            StageKey::PAJAK => 'Petugas5',
+                            StageKey::PETUGAS_PENGETIKAN => 'Petugas Pajak',
+                            StageKey::PETUGAS_PAJAK => 'Petugas Penyiapan',
                             default => null,
                         };
                         if ($nextRoleName) {
@@ -164,10 +164,10 @@ class TugasResource extends Resource
                         // 2. Tentukan tahap selanjutnya
                         $nextStage = null;
                         $nextAssigneeId = $data['next_assignee_id'] ?? null;
-                        if ($parentRecord->current_stage_key === StageKey::PETUGAS_2)
-                            $nextStage = StageKey::PAJAK;
-                        if ($parentRecord->current_stage_key === StageKey::PAJAK)
-                            $nextStage = StageKey::PETUGAS_5;
+                        if ($parentRecord->current_stage_key === StageKey::PETUGAS_PENGETIKAN)
+                            $nextStage = StageKey::PETUGAS_PAJAK;
+                        if ($parentRecord->current_stage_key === StageKey::PETUGAS_PAJAK)
+                            $nextStage = StageKey::PETUGAS_PENYIAPAN;
 
                         // 3. Jika ada tahap selanjutnya, buat tugas baru dan update parent
                         if ($nextStage && $nextAssigneeId) {

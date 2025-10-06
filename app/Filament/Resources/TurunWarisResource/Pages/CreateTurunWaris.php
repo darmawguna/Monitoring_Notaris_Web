@@ -20,12 +20,12 @@ class CreateTurunWaris extends CreateRecord
     protected function handleRecordCreation(array $data): Model
     {
         // 1. Ambil ID petugas, lalu hapus dari data utama
-        $petugas2Id = $data['petugas_2_id'];
-        unset($data['petugas_2_id']);
+        $petugas2Id = $data['petugas_pengetikan_id'];
+        unset($data['petugas_pengetikan_id']);
 
         // 2. Tetapkan status dan tahap awal
         $data['status_overall'] = BerkasStatus::PROGRES;
-        $data['current_stage_key'] = StageKey::PETUGAS_2;
+        $data['current_stage_key'] = StageKey::PETUGAS_PENGETIKAN;
 
         // 3. Panggil metode create() dari parent
         return static::getModel()::create($data);
@@ -41,28 +41,28 @@ class CreateTurunWaris extends CreateRecord
     {
         // 1. Buat catatan progres "done" untuk Front Office
         $this->record->progress()->create([
-            'stage_key' => StageKey::FRONT_OFFICE,
+            'stage_key' => StageKey::PETUGAS_ENTRY,
             'status' => 'done',
             'notes' => 'Berkas Turun Waris diterima oleh Front Office.',
             'assignee_id' => auth()->id(),
             'completed_at' => now(),
         ]);
-        $deadlineDays = DeadlineConfig::where('stage_key', StageKey::PETUGAS_2)->value('default_days') ?? 3;
+        $deadlineDays = DeadlineConfig::where('stage_key', StageKey::PETUGAS_PENGETIKAN)->value('default_days') ?? 3;
         $startedAt = now();
         $deadline = Carbon::parse($startedAt)->addDays($deadlineDays);
 
 
         // 2. Buat catatan progres "pending" untuk Petugas 2
         $this->record->progress()->create([
-            'stage_key' => StageKey::PETUGAS_2,
+            'stage_key' => StageKey::PETUGAS_PENGETIKAN,
             'status' => 'pending',
-            'notes' => 'Berkas ditugaskan ke Petugas 2.',
-            'assignee_id' => $this->data['petugas_2_id'], // Ambil ID dari form
+            'notes' => 'Berkas ditugaskan ke Petugas Pengetikan.',
+            'assignee_id' => $this->data['petugas_pengetikan_id'], // Ambil ID dari form
             'deadline' => $deadline
         ]);
 
         // 3. Kirim notifikasi ke Petugas 2
-        $petugas2 = User::find($this->data['petugas_2_id']);
+        $petugas2 = User::find($this->data['petugas_pengetikan_id']);
         if ($petugas2) {
             Notification::make()
                 ->title('Anda menerima tugas Turun Waris baru!')

@@ -42,6 +42,7 @@ use Filament\Infolists\Components\Actions; // Namespace untuk ActionsColumn
 use Filament\Support\Enums\Alignment;
 use Filament\Tables\Actions\ViewAction;
 
+
 class BerkasResource extends Resource
 {
     protected static ?string $model = Berkas::class;
@@ -244,6 +245,7 @@ class BerkasResource extends Resource
 
                 Section::make('Upload Dokumen')
                     ->schema([
+                        // --- INI BAGIAN YANG DIPERBARUI SECARA TOTAL ---
                         Repeater::make('files')
                             ->relationship()
                             ->label('Lampiran Berkas')
@@ -259,28 +261,39 @@ class BerkasResource extends Resource
                                         'lainnya' => 'Lainnya',
                                     ])
                                     ->required()
-                                    // 1. Buat dropdown ini reaktif
                                     ->reactive(),
-
                                 FileUpload::make('path')
                                     ->label('Upload File')
                                     ->disk('public')
                                     ->directory('berkas-attachments')
                                     ->preserveFilenames()
                                     ->required(),
-
-                                // 2. Tambahkan TextInput kondisional
                                 TextInput::make('type_lainnya')
                                     ->label('Sebutkan Jenis Dokumen')
                                     ->placeholder('Contoh: Surat Kuasa')
-                                    // 3. Atur visibilitas dan persyaratan
                                     ->visible(fn(Get $get): bool => $get('type') === 'lainnya')
                                     ->required(fn(Get $get): bool => $get('type') === 'lainnya'),
                             ])
                             ->columns(2)
                             ->addActionLabel('Tambah Dokumen Lampiran')
-                            // 4. Perbarui logika penyimpanan data
-                            ->mutateRelationshipDataBeforeCreateUsing(function (array $data): array {
+
+                            // 1. Tambahkan hook ini untuk memuat data edit dengan benar
+                            ->mutateRelationshipDataBeforeFillUsing(function (array $data): array {
+                                $standardOptions = ['ktp_suami', 'ktp_istri', 'kk', 'sertifikat', 'pbb'];
+
+                                // Jika nilai 'type' yang ada di database BUKAN salah satu opsi standar...
+                                if (!in_array($data['type'], $standardOptions)) {
+                                    // ...maka "suntikkan" nilai tersebut ke field 'type_lainnya'
+                                    $data['type_lainnya'] = $data['type'];
+                                    // dan atur 'type' kembali ke 'lainnya' agar dropdown dan text input muncul
+                                    $data['type'] = 'lainnya';
+                                }
+
+                                return $data;
+                            })
+
+                            // 2. Gunakan hook ini untuk menangani CREATE dan UPDATE
+                            ->mutateRelationshipDataBeforeSaveUsing(function (array $data): array {
                                 // Jika pengguna memilih 'lainnya', gunakan input teks sebagai gantinya.
                                 if ($data['type'] === 'lainnya' && isset($data['type_lainnya'])) {
                                     $data['type'] = $data['type_lainnya'];
@@ -295,20 +308,19 @@ class BerkasResource extends Resource
                 // Kolom penugasan (tetap ada di bawah agar alur kerja tidak berubah)
                 Section::make('Penugasan Awal')
                     ->schema([
-                        Select::make('petugas_2_id') // 1. Nama field sudah benar
-                            ->label('Tugaskan ke Petugas 2')
+                        Select::make('petugas_pengetikan_id') // 1. Nama field sudah benar
+                            ->label('Tugaskan ke Petugas Pengetikan')
                             ->options( // 2. Menggunakan ->options() sudah benar
                                 User::whereHas(
                                     'role',
-                                    fn($query) => $query->where('name', 'Petugas2')
+                                    fn($query) => $query->where('name', 'Petugas Pengetikan')
                                 )->pluck('name', 'id')
                             )
                             ->searchable()
                             ->preload()
                             ->required()
                         // 3. HAPUS ->mapped(false) karena sudah ditangani di CreateBerkas.php
-                    ])
-
+                    ]),
             ]);
     }
 
@@ -406,73 +418,15 @@ class BerkasResource extends Resource
                     ]),
 
 
+
                 InfolistSection::make('Lampiran Berkas')
                     ->schema([
-                        RepeatableEntry::make('files')
+                        // Ganti seluruh RepeatableEntry dengan satu ViewEntry ini
+                        ViewEntry::make('files')
                             ->hiddenLabel()
-                            ->schema([
-                                TextEntry::make('type')
-                                    ->label('Jenis Dokumen'),
-
-                                // --- INI BAGIAN YANG DIPERBARUI SECARA TOTAL ---
-
-                                // Komponen 1: Tampilkan thumbnail gambar (tidak bisa diklik)
-                                ImageEntry::make('path')
-                                    ->label('Pratinjau')
-                                    ->disk('public')
-                                    ->height(80)
-                                    ->visible(function ($record): bool {
-                                        if (!$record || !$record->path)
-                                            return false;
-                                        return Str::is(['*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp', '*.svg'], strtolower($record->path));
-                                    }),
-
-                                // Komponen 2: Fallback untuk file yang BUKAN gambar
-                                TextEntry::make('path')
-                                    ->label('File')
-                                    ->formatStateUsing(fn(?string $state): string => $state ? basename($state) : 'N/A')
-                                    ->url(fn($record) => $record->path ? Storage::url($record->path) : null, true)
-                                    ->color('primary')
-                                    ->visible(function ($record): bool {
-                                        if (!$record || !$record->path)
-                                            return false;
-                                        return !Str::is(['*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp', '*.svg'], strtolower($record->path));
-                                    }),
-
-                                // Komponen 3: Kolom Aksi Terpisah
-                                // TODO perbarui alignmentnya agar berada pada posisi yang sesuai.
-                                Actions::make([
-                                    // Aksi untuk membuka modal pratinjau
-                                    Action::make('preview')
-                                        ->label('Pratinjau')
-                                        ->icon('heroicon-o-eye')
-                                        ->modalContent(
-                                            fn($record) =>
-                                            Infolist::make()
-                                                ->record($record)
-                                                ->schema([
-                                                    ImageEntry::make('path')->hiddenLabel()->disk('public')->extraAttributes(['style' => 'display: block; max-width: 100%; height: auto; margin: auto;']),
-                                                ])
-                                        )
-                                        ->modalSubmitAction(false)
-                                        ->modalCancelAction(false) // Sembunyikan tombol default
-                                        ->visible(function ($record): bool {
-                                            if (!$record || !$record->path)
-                                                return false;
-                                            return Str::is(['*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp', '*.svg'], strtolower($record->path));
-                                        }),
-
-                                    // Aksi untuk mengunduh file
-                                    Action::make('download')
-                                        ->label('Unduh')
-                                        ->icon('heroicon-o-arrow-down-tray')
-                                        ->color('success')
-                                        ->url(fn($record) => route('files.download', ['appFile' => $record]), shouldOpenInNewTab: true)
-                                ])->label('Aksi')
-                                    ->alignment(Alignment::Center),
-                            ])->columns(3), // Ubah menjadi 3 kolom
-                    ])->collapsible(),
-
+                            ->view('filament.infolists.components.file-list-entry'),
+                    ])
+                    ->collapsible(),
                 InfolistSection::make('Riwayat & Durasi Pengerjaan')
                     ->schema([
                         // Ganti semua RepeatableEntry dengan satu ViewEntry

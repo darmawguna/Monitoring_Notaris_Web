@@ -55,6 +55,7 @@ class AdminPanelProvider extends PanelProvider
                 KwitansiTerbaru::class,
             ])
             ->renderHook('panels::topbar.start', fn() => view('filament.partials.navbar-title'))
+            ->renderHook('panels::head.end', fn() => view('filament.partials.sidebar-styles'))
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,

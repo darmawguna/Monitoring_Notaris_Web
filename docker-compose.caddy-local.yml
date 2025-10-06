@@ -1,0 +1,14 @@
+services:
+  caddy:
+    image: caddy:2.8
+    container_name: docuhub_caddy_local
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "127.0.0.1:8081:80"   # akses lokal via http://127.0.0.1:8080
+    networks:
+      - docuhub_network
+    volumes:
+      - ./docker/caddy/Caddyfile.local:/etc/caddy/Caddyfile:ro
+      - ./public:/srv/public:ro

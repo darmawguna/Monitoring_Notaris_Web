@@ -81,6 +81,13 @@ RUN npm run build
 FROM php_base AS deps
 WORKDIR /app
 
+RUN apk add --no-cache --virtual .build-deps \
+    $PHPIZE_DEPS icu-dev libzip-dev freetype-dev libpng-dev libjpeg-turbo-dev libxml2-dev
+
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+ && docker-php-ext-install -j"$(nproc)" \
+    bcmath exif intl gd pdo_mysql zip opcache xml dom pcntl
+
 COPY composer.json composer.lock* ./
 RUN composer install --no-dev --prefer-dist --no-progress --no-interaction --no-scripts \
  && composer dump-autoload --classmap-authoritative --no-interaction --no-scripts
