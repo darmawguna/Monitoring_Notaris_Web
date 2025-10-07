@@ -7,97 +7,110 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use PhpOffice\PhpWord\TemplateProcessor;
+use Illuminate\Support\Facades\Log;
 
 class KwitansiController extends Controller
 {
     public function download(Receipt $receipt)
     {
-        // (Opsional) otorisasi jika pakai policy
-        // $this->authorize('view', $receipt);
+        try {
+            Log::info('--- MEMULAI PROSES DOWNLOAD KWITANSI ---');
+            Log::info('Menerima objek Receipt via Route-Model Binding. ID: ' . $receipt->id);
 
-        $templatePath = storage_path('app/template/template_kwitansi.docx');
-        if (!file_exists($templatePath)) {
-            abort(404, 'Template kwitansi tidak ditemukan.');
-        }
+            $templatePath = storage_path('app/template/template_kwitansi.docx');
+            Log::info("Mengecek keberadaan template di path: {$templatePath}");
 
-        $doc = new TemplateProcessor($templatePath);
-
-        // ---------- Nilai umum (terisi di dua halaman sekaligus) ----------
-        $doc->setValue('nama_pemohon', $receipt->nama_pemohon_kwitansi ?? 'N/A');
-        $doc->setValue('nomor_kwitansi', $receipt->receipt_number ?? 'N/A');
-        $doc->setValue('notes_kwitansi', $receipt->notes_kwitansi ?? '');
-
-        $tanggal = $receipt->issued_at
-            ? Carbon::parse($receipt->issued_at)->translatedFormat('d F Y')
-            : now()->translatedFormat('d F Y');
-        $doc->setValue('tanggal_kwitansi', $tanggal);
-
-        // Jika kamu punya info_sertifikat/informasi_kwitansi di DB:
-        // if (property_exists($receipt, 'informasi_kwitansi')) {
-        //     $doc->setValue('info_sertifikat', (string) $receipt->informasi_kwitansi);
-        // }
-        $doc->setValue('info_sertifikat', (string) $receipt->informasi_kwitansi);
-
-        // ---------- Siapkan rincian ----------
-        $rawItems = $receipt->detail_biaya ?? [];
-        // Normalisasi & bersihkan angka
-        $items = array_map(function ($it) {
-            $desc = (string) ($it['deskripsi'] ?? '');
-            $amt = (int) preg_replace('/\D/', '', (string) ($it['jumlah'] ?? 0));
-            return ['deskripsi' => $desc, 'jumlah' => $amt];
-        }, is_array($rawItems) ? $rawItems : $rawItems->toArray());
-
-        $totalItems = array_sum(array_column($items, 'jumlah'));
-        $grandTotal = count($items) ? $totalItems : (int) ($receipt->amount ?? 0);
-
-        // ---------- Set total & terbilang (dipakai di semua tempat ${jumlah}, ${terbilang}) ----------
-        $doc->setValue('jumlah', number_format($grandTotal, 0, ',', '.'));
-        $doc->setValue('terbilang', $this->terbilang($grandTotal) . ' Rupiah');
-
-        // ---------- Clone ROW untuk HALAMAN 1 ----------
-        if (count($items)) {
-            // Pastikan ${deskripsi_item_1} & ${jumlah_item_1} berada di SATU baris tabel
-            $doc->cloneRow('deskripsi_item-1', count($items));
-            foreach ($items as $i => $it) {
-                $n = $i + 1;
-                $doc->setValue("deskripsi_item-1#{$n}", $it['deskripsi']);
-                $doc->setValue("jumlah_item-1#{$n}", number_format($it['jumlah'], 0, ',', '.'));
+            if (!file_exists($templatePath)) {
+                Log::error('GAGAL: File template kwitansi tidak ditemukan di path yang ditentukan.');
+                abort(404, 'Template kwitansi tidak ditemukan.');
             }
-        } else {
-            // Jika tidak ada rincian, isi placeholder agar tidak kosong/invalid
-            $doc->setValue('deskripsi-item-1', '-');
-            $doc->setValue('jumlah_item-1', '0');
-        }
+            Log::info('Berhasil menemukan file template.');
 
-        // ---------- Clone ROW untuk HALAMAN 2 ----------
-        if (count($items)) {
-            // Pastikan ${deskripsi_item_2} & ${jumlah_item_2} berada di SATU baris tabel
-            $doc->cloneRow('deskripsi_item-2', count($items));
-            foreach ($items as $i => $it) {
-                $n = $i + 1;
-                $doc->setValue("deskripsi_item-2#{$n}", $it['deskripsi']);
-                $doc->setValue("jumlah_item-2#{$n}", number_format($it['jumlah'], 0, ',', '.'));
+            $doc = new TemplateProcessor($templatePath);
+            Log::info('Berhasil memuat template ke dalam PHPWord TemplateProcessor.');
+
+            // ---------- Mengisi data ke dalam template ----------
+            $doc->setValue('nama_pemohon', $receipt->nama_pemohon_kwitansi ?? 'N/A');
+            $doc->setValue('nomor_kwitansi', $receipt->receipt_number ?? 'N/A');
+            $doc->setValue('notes_kwitansi', $receipt->notes_kwitansi ?? '');
+
+            $tanggal = $receipt->issued_at
+                ? Carbon::parse($receipt->issued_at)->translatedFormat('d F Y')
+                : now()->translatedFormat('d F Y');
+            $doc->setValue('tanggal_kwitansi', $tanggal);
+            $doc->setValue('info_sertifikat', (string) $receipt->informasi_kwitansi);
+
+            $rawItems = $receipt->detail_biaya ?? [];
+            $items = array_map(function ($it) {
+                $desc = (string) ($it['deskripsi'] ?? '');
+                $amt = (int) preg_replace('/\D/', '', (string) ($it['jumlah'] ?? 0));
+                return ['deskripsi' => $desc, 'jumlah' => $amt];
+            }, is_array($rawItems) ? $rawItems : $rawItems->toArray());
+
+            $totalItems = array_sum(array_column($items, 'jumlah'));
+            $grandTotal = count($items) ? $totalItems : (int) ($receipt->amount ?? 0);
+
+            $doc->setValue('jumlah', number_format($grandTotal, 0, ',', '.'));
+            $doc->setValue('terbilang', $this->terbilang($grandTotal) . ' Rupiah');
+            Log::info('Berhasil mengisi data umum (nama, tanggal, total).');
+
+            // ---------- Mengisi item rincian (clone row) ----------
+            if (count($items)) {
+                $doc->cloneRow('deskripsi_item-1', count($items));
+                $doc->cloneRow('deskripsi_item-2', count($items));
+                foreach ($items as $i => $it) {
+                    $n = $i + 1;
+                    $doc->setValue("deskripsi_item-1#{$n}", $it['deskripsi']);
+                    $doc->setValue("jumlah_item-1#{$n}", number_format($it['jumlah'], 0, ',', '.'));
+                    $doc->setValue("deskripsi_item-2#{$n}", $it['deskripsi']);
+                    $doc->setValue("jumlah_item-2#{$n}", number_format($it['jumlah'], 0, ',', '.'));
+                }
+                Log::info('Berhasil mengisi ' . count($items) . ' item rincian.');
+            } else {
+                $doc->setValue('deskripsi-item-1', '-');
+                $doc->setValue('jumlah_item-1', '0');
+                $doc->setValue('deskripsi_item-2', '-');
+                $doc->setValue('jumlah_item-2', '0');
+                Log::info('Tidak ada item rincian, mengisi placeholder default.');
             }
-        } else {
-            $doc->setValue('deskripsi_item-2', '-');
-            $doc->setValue('jumlah_item-2', '0');
+
+            // ---------- Menyiapkan file untuk disimpan ----------
+            $displayName = $receipt->nama_pemohon_kwitansi ?: 'Tanpa Nama';
+            $fileName = 'Kwitansi - ' . Str::slug($displayName) . '.docx';
+            $tempDir = storage_path('app/temp/');
+
+            Log::info("Mengecek direktori sementara: {$tempDir}");
+            if (!File::isDirectory($tempDir)) {
+                Log::info('Direktori sementara tidak ada, mencoba membuatnya...');
+                File::makeDirectory($tempDir, 0775, true);
+                Log::info('Berhasil membuat direktori sementara.');
+            }
+
+            $tempPath = $tempDir . $fileName;
+            Log::info("Mencoba menyimpan file yang telah diproses ke: {$tempPath}");
+
+            $doc->saveAs($tempPath);
+            Log::info('Berhasil menyimpan file sementara ke disk.');
+
+            if (!file_exists($tempPath)) {
+                Log::error('FATAL: File sementara tidak ada setelah proses saveAs(). Periksa izin tulis folder storage/app/temp/.');
+                abort(500, 'Gagal membuat file dokumen.');
+            }
+            Log::info('File sementara dikonfirmasi ada, memulai proses download ke pengguna...');
+
+            return response()->download($tempPath, $fileName, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            ])->deleteFileAfterSend(true);
+
+        } catch (\Exception $e) {
+            Log::error('--- TERJADI EXCEPTION FATAL SAAT GENERATE DOKUMEN ---');
+            Log::error('Pesan Error: ' . $e->getMessage());
+            Log::error('Lokasi File: ' . $e->getFile() . ' pada baris ' . $e->getLine());
+            Log::error('Stack Trace Lengkap: ' . $e->getTraceAsString());
+
+            // Tampilkan error 500 agar kita tahu ada masalah server, bukan 404
+            abort(500, 'Terjadi kesalahan internal saat memproses dokumen Anda. Silakan cek log server.');
         }
-
-        // ---------- Simpan & kirim ----------
-        $displayName = $receipt->nama_pemohon_kwitansi ?: 'Tanpa Nama';
-        $fileName = 'Kwitansi - ' . Str::slug($displayName) . '.docx';
-
-        $tempDir = storage_path('app/temp/');
-        if (!File::isDirectory($tempDir)) {
-            File::makeDirectory($tempDir, 0755, true);
-        }
-        $tempPath = $tempDir . $fileName;
-
-        $doc->saveAs($tempPath);
-
-        return response()->download($tempPath, $fileName, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        ])->deleteFileAfterSend(true);
     }
 
     private function terbilang($angka): string
