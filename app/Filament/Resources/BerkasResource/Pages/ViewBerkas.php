@@ -51,8 +51,8 @@ class ViewBerkas extends ViewRecord
                     /** @var \App\Models\Berkas $record */
                     $record = $this->getRecord();
                     $nextRoleName = match ($record->current_stage_key) {
-                        StageKey::PETUGAS_PENGETIKAN => 'Pajak',
-                        StageKey::PETUGAS_PAJAK => 'Petugas5',
+                        StageKey::PETUGAS_PENGETIKAN => 'Petugas Pajak',
+                        StageKey::PETUGAS_PAJAK => 'Petugas Penyiapan',
                         default => null,
                     };
                     if ($nextRoleName) {

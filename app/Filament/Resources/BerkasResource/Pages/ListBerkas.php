@@ -13,7 +13,18 @@ class ListBerkas extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make(),
+            Actions\CreateAction::make()
+                // --- PERUBAHAN DI SINI ---
+                // Tambahkan metode ->visible() dengan logika otorisasi
+                ->visible(function (): bool {
+                    // Dapatkan pengguna yang sedang login
+                    $user = auth()->user();
+                    // Kembalikan 'true' (tampilkan tombol) hanya jika peran pengguna
+                    // adalah 'Superadmin' atau 'FrontOffice'.
+                    // Catatan: Saya mengasumsikan 'petugasentry' adalah 'FrontOffice'.
+                    // Anda bisa mengubahnya jika nama perannya berbeda.
+                    return in_array($user->role->name, ['Superadmin', 'FrontOffice']);
+                }),
         ];
     }
 }
