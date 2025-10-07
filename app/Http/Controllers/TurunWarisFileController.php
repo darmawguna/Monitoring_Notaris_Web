@@ -8,20 +8,14 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TurunWarisFileController extends Controller
 {
-    public function download($id): StreamedResponse
+    public function download(TurunWarisFile $turunWarisFile): StreamedResponse
     {
-        $turunWarisFile = TurunWarisFile::findOrFail($id);
-        // Pastikan path file tidak kosong
-        if (empty($turunWarisFile->path)) {
-            abort(404, 'Data file tidak lengkap.');
-        }
-
-        // Pastikan file benar-benar ada di storage
+        $disk = Storage::disk('public');
+        // Pastikan file benar-benar ada di storage untuk menghindari error.
         if (!Storage::disk('public')->exists($turunWarisFile->path)) {
-            abort(404, 'File tidak ditemukan di storage.');
+            abort(404, 'File tidak ditemukan.');
         }
 
-        $originalFilename = basename($turunWarisFile->path);
-        return Storage::disk('public')->download($turunWarisFile->path, $originalFilename);
+        return $disk->download($turunWarisFile->path);
     }
 }
