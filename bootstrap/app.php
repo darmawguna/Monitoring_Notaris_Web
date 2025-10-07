@@ -11,6 +11,10 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    ->withProviders([
+        // ... provider lain yang mungkin sudah ada
+        App\Providers\FilamentServiceProvider::class, // <-- TAMBAHKAN BARIS INI
+    ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->trustProxies(at: '*');
     })
