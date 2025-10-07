@@ -58,7 +58,7 @@ Ia meniru tampilan tabel Filament untuk konsistensi UI.
                         <td class="fi-ta-cell p-0 sm:first-of-type:ps-6 sm:last-of-type:pe-6">
                             <div class="px-3 py-4">
                                 @if (Str::is(['*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp'], strtolower($file->path)))
-                                    <img src="{{ Storage::disk('public')->url($file->path) }}" alt="Pratinjau" class="h-10 w-10 rounded-md object-cover">
+                                    <img src="{{ \Illuminate\Support\Facades\Storage::url($file->path) }}" alt="Pratinjau" class="h-10 w-10 rounded-md object-cover">
                                 @else
                                     {{-- Tampilkan ikon file generik jika bukan gambar --}}
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-6 w-6 text-gray-400 dark:text-gray-500">

@@ -10,7 +10,7 @@
             {{-- Pratinjau (jika gambar) --}}
             <div class="flex-shrink-0">
                 @if (Str::is(['*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp'], strtolower($file->path)))
-                    <img src="{{ Storage::disk('public')->url($file->path) }}" alt="Pratinjau" class="h-10 w-10 rounded-md object-cover">
+                    <img src="{{ Storage::url($file->path) }}" alt="Pratinjau" class="h-10 w-10 rounded-md object-cover">
                 @else
                     {{-- Ikon file generik jika bukan gambar --}}
                     <div class="flex h-10 w-10 items-center justify-center rounded-md bg-gray-100 dark:bg-gray-800">
