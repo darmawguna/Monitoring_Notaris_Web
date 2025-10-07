@@ -51,8 +51,8 @@ class ViewBerkas extends ViewRecord
                     /** @var \App\Models\Berkas $record */
                     $record = $this->getRecord();
                     $nextRoleName = match ($record->current_stage_key) {
-                        StageKey::PETUGAS_2 => 'Pajak',
-                        StageKey::PAJAK => 'Petugas5',
+                        StageKey::PETUGAS_PENGETIKAN => 'Pajak',
+                        StageKey::PETUGAS_PAJAK => 'Petugas5',
                         default => null,
                     };
                     if ($nextRoleName) {
@@ -84,8 +84,8 @@ class ViewBerkas extends ViewRecord
 
                     // Tentukan & buat tugas selanjutnya (jika ada)
                     $nextStage = match ($record->current_stage_key) {
-                        StageKey::PETUGAS_2 => StageKey::PAJAK,
-                        StageKey::PAJAK => StageKey::PETUGAS_5,
+                        StageKey::PETUGAS_PENGETIKAN => StageKey::PETUGAS_PAJAK,
+                        StageKey::PETUGAS_PAJAK => StageKey::PETUGAS_PENYIAPAN,
                         default => null,
                     };
                     $nextAssigneeId = $data['next_assignee_id'] ?? null;
@@ -112,62 +112,6 @@ class ViewBerkas extends ViewRecord
 
                     // 4. Redirect kembali ke halaman "Tugas Saya"
                     $this->redirect(TugasResource::getUrl('index'));
-                }),
-
-            Actions\Action::make('createReceipt')
-                ->label('Buat Kwitansi')
-                ->icon('heroicon-o-currency-dollar')
-                ->color('success')
-                // Hanya tampilkan tombol ini jika berkas BELUM punya kwitansi
-                ->visible(fn(): bool => !$this->record->receipt()->exists())
-                // Definisikan form di dalam modal
-                ->form([
-                    TextInput::make('receipt_number')
-                        ->label('Nomor Kwitansi')
-                        ->default('KW-' . strtoupper(Str::random(8)))
-                        ->required(),
-                    TextInput::make('amount')
-                        ->label('Jumlah Dibayar')
-                        ->required()
-                        ->numeric()
-                        ->prefix('Rp')
-                        ->helperText('Masukkan angka saja, tanpa titik atau koma.'),
-                    DatePicker::make('issued_at')
-                        ->label('Tanggal Dikeluarkan')
-                        ->required()
-                        ->default(now()),
-                    Select::make('payment_method')
-                        ->label('Metode Pembayaran')
-                        ->options([
-                            'cash' => 'Tunai (Cash)',
-                            'transfer' => 'Transfer Bank',
-                        ])
-                        ->required(),
-                    Textarea::make('notes')
-                        ->label('Catatan Kwitansi')
-                        ->columnSpanFull(),
-                ])
-                // Definisikan logika saat form di-submit
-                ->action(function (array $data): void {
-                    // 1. Buat record baru di tabel 'receipts' melalui relasi
-                    $this->record->receipt()->create([
-                        'receipt_number' => $data['receipt_number'],
-                        'amount' => $data['amount'],
-                        'issued_at' => $data['issued_at'],
-                        'payment_method' => $data['payment_method'],
-                        'notes' => $data['notes'],
-                        'issued_by' => auth()->id(), // Ambil ID pengguna saat ini
-                    ]);
-
-                    // 2. Update kolom 'total_paid' di tabel 'berkas'
-                    $this->record->update([
-                        'total_paid' => $data['amount']
-                    ]);
-
-                    Notification::make()
-                        ->title('Kwitansi berhasil dibuat')
-                        ->success()
-                        ->send();
                 }),
         ];
     }
