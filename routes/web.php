@@ -11,9 +11,9 @@ use App\Http\Controllers\FileController;
 Route::redirect('/', '/admin');
 
 
-Route::get('/files/{appFile}/download', [FileController::class, 'download'])
-    ->name('files.download')
-    ->middleware('auth');
+// Route::get('/files/{appFile}/download', [FileController::class, 'download'])
+//     ->name('files.download')
+//     ->middleware('auth');
 
 Route::get('/berkas-files/{berkasFile}/download', [BerkasFileController::class, 'download'])
     ->name('berkas-files.download')
