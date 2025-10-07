@@ -22,9 +22,6 @@ Ia meniru tampilan tabel Filament untuk konsistensi UI.
                     <th class="fi-ta-header-cell px-3 py-3.5 sm:px-6">
                         <span class="text-sm font-semibold text-gray-950 dark:text-white">Nama File</span>
                     </th>
-                    <th class="fi-ta-header-cell px-3 py-3.5 sm:px-6">
-                        <span class="text-sm font-semibold text-gray-950 dark:text-white">Pratinjau</span>
-                    </th>
                     <th class="fi-ta-header-cell px-3 py-3.5 sm:px-6 text-center">
                         <span class="text-sm font-semibold text-gray-950 dark:text-white">Aksi</span>
                     </th>
@@ -51,20 +48,6 @@ Ia meniru tampilan tabel Filament untuk konsistensi UI.
                                     {{-- Hanya menampilkan nama file, bukan path lengkap --}}
                                     {{ basename($file->path) }}
                                 </span>
-                            </div>
-                        </td>
-
-                        {{-- Kolom 3: Pratinjau (hanya jika gambar) --}}
-                        <td class="fi-ta-cell p-0 sm:first-of-type:ps-6 sm:last-of-type:pe-6">
-                            <div class="px-3 py-4">
-                                @if (Str::is(['*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp'], strtolower($file->path)))
-                                    <img src="{{ \Illuminate\Support\Facades\Storage::url($file->path) }}" alt="Pratinjau" class="h-10 w-10 rounded-md object-cover">
-                                @else
-                                    {{-- Tampilkan ikon file generik jika bukan gambar --}}
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-6 w-6 text-gray-400 dark:text-gray-500">
-                                        <path fill-rule="evenodd" d="M4.5 2A1.5 1.5 0 0 0 3 3.5v13A1.5 1.5 0 0 0 4.5 18h11a1.5 1.5 0 0 0 1.5-1.5V7.621a1.5 1.5 0 0 0-.44-1.06l-4.12-4.122A1.5 1.5 0 0 0 11.378 2H4.5Zm2.25 8.5a.75.75 0 0 0 0 1.5h6.5a.75.75 0 0 0 0-1.5h-6.5Zm0 3a.75.75 0 0 0 0 1.5h3.5a.75.75 0 0 0 0-1.5h-3.5Z" clip-rule="evenodd" />
-                                    </svg>
-                                @endif
                             </div>
                         </td>
 
