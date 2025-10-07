@@ -88,7 +88,7 @@ WORKDIR /var/www/html
 COPY --chown=www-data:www-data . .
 COPY --chown=www-data:www-data --from=deps /app/vendor ./vendor
 COPY --chown=www-data:www-data --from=assets /app/public/build ./public/build
-
+COPY --chown=www-data:www-data docker/templates/ /var/www/html/storage/app/template/
 # Set correct permissions and run optimizations
 RUN mkdir -p storage/framework/{cache,sessions,views} bootstrap/cache \
  && chown -R www-data:www-data storage bootstrap \
