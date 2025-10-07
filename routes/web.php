@@ -21,7 +21,7 @@ Route::get('/berkas-files/{berkasFile}/download', [BerkasFileController::class, 
 Route::get('/perbankan-files/{perbankanFile}/download', [PerbankanFileController::class, 'download'])->name('perbankan-files.download')->middleware('auth');
 Route::get('/turun-waris-files/{id}/download', [TurunWarisFileController::class, 'download'])->name('turun-waris-files.download')->middleware('auth');
 
-Route::get('/kwitansi/{id}/download', [KwitansiController::class, 'download'])
+Route::get('/kwitansi/{receipt}/download', [KwitansiController::class, 'download'])
     ->name('kwitansi.download')
     ->middleware('auth');
 // Route::get('/SerahTerima/{tandaTerimaSertifikat}/download', [TandaTerimaController::class, 'download'])

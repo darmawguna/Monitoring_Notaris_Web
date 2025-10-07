@@ -133,7 +133,7 @@ class KwitansiResource extends Resource
                     ->label('Download Kwitansi')
                     ->icon('heroicon-o-arrow-down-tray')
                     ->color('success')
-                    ->url(fn(Receipt $record) => route('kwitansi.download', ['id' => $record->id]), shouldOpenInNewTab: true),
+                    ->url(fn(Receipt $record) => route('kwitansi.download', $record), shouldOpenInNewTab: true),
             ]);
     }
 
