@@ -51,6 +51,7 @@ services:
       - app_code:/var/www/html
       - ./storage/logs:/var/www/html/storage/logs
       - ./docker/php/zz-fpm.conf:/usr/local/etc/php-fpm.d/zz-fpm.conf:ro
+      - ./docker/php/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
     expose:
       - "9000"
     depends_on:
