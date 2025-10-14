@@ -2,137 +2,39 @@ name: Deploy to VPS
 
 on:
   workflow_run:
-    workflows: ["Build & Push Image"]
-    types: ["completed"]
-    branches: ["production"]
+    workflows: ["Build & Push Image (Docker Hub)"]
+    types: [completed]
+    branches: [main]
 
 jobs:
   deploy:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-
     steps:
-      - name: Deploy via SSH
+      - name: Deploy to Server via SSH
         uses: appleboy/ssh-action@v1.1.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
-          port: ${{ secrets.VPS_PORT }}
-          script_stop: true
+          port: 2607 # Ganti jika perlu
           script: |
-            set -euo pipefail
+            set -e # Hentikan skrip jika ada error
+            cd /home/projectdarma/Monitoring_Notaris_Web # Ganti path jika perlu
 
-            # ==== Konfigurasi dasar ====
-            PROJECT_DIR="/home/projectdarma/Monitoring_Notaris_Web"
-            COMPOSE_FILE="${PROJECT_DIR}/docker-compose.yml"
-            APP_SVC="app"
-            DB_SVC="db"
-            APP_CONT="docuhub_app"
-            DB_CONT="docuhub_db"
+            echo "===> Pull image terbaru dari Docker Hub"
+            docker compose pull
 
-            echo "===> cd to project"
-            cd "$PROJECT_DIR" || { echo "Project dir not found: $PROJECT_DIR"; exit 1; }
-            pwd
+            echo "===> Hentikan dan jalankan kembali semua layanan dengan image baru"
+            docker compose up -d
 
-            # (opsional) sinkronisasi repo ke main
-            if [ -d .git ]; then
-              echo "===> Fetching origin"
-              git fetch --all --prune || true
-              git reset --hard origin/main || true
-            fi
+            echo "===> Jalankan perintah pasca-deployment"
+            # Jalankan migrasi di dalam kontainer 'app'
+            docker compose exec -T app php artisan migrate --force 
+            
+            echo "===> Reload Caddy dan bersihkan image lama"
+            sudo systemctl reload caddy
+            docker image prune -f
 
-            echo "===> Compose services (from $COMPOSE_FILE):"
-            SERVICES="$(docker compose -f "$COMPOSE_FILE" config --services 2>/dev/null || true)"
-            echo "$SERVICES"
-            has_service() { echo "$SERVICES" | grep -qx "$1"; }
+            echo "===> Deploy selesai!"
 
-            echo "===> Pull images"
-            docker compose -f "$COMPOSE_FILE" pull "$APP_SVC" || true
-            if has_service "$DB_SVC"; then
-              docker compose -f "$COMPOSE_FILE" pull "$DB_SVC" || true
-            fi
-
-            # ==== Helper: pembaca .env yang aman ====
-            get_env() {
-              # usage: get_env KEY
-              # baca dari .env; abaikan komentar & baris kosong; dukung value ber-quote
-              awk -F= -v k="$1" '
-                $0 !~ /^#/ && $0 ~ ("^"k"=") {
-                  sub("^"k"=", "", $0)
-                  val=$0
-                  sub(/^[[:space:]]+/, "", val); sub(/[[:space:]]+$/, "", val)
-                  if ((val ~ /^".*"$/) || (val ~ /^'\''.*'\''$/)) { val=substr(val,2,length(val)-2) }
-                  print val; exit
-                }
-              ' .env 2>/dev/null
-            }
-
-            DB_ROOT_PASSWORD_VAL="$(get_env DB_ROOT_PASSWORD || true)"
-            DB_DATABASE_VAL="$(get_env DB_DATABASE || true)"
-
-            # ==== Backup DB (jika ada service db & healthy) ====
-            if has_service "$DB_SVC"; then
-              echo "===> Bring up DB (for backup) + wait healthy"
-              docker compose -f "$COMPOSE_FILE" up -d "$DB_SVC" --remove-orphans
-
-              DB_DEADLINE=$(( $(date +%s) + 180 ))
-              until [ "$(docker inspect -f '{{.State.Health.Status}}' "$DB_CONT" 2>/dev/null || echo starting)" = "healthy" ]; do
-                [ "$(date +%s)" -gt "$DB_DEADLINE" ] && { echo "DB not healthy, skip backup"; break; }
-                sleep 3
-              done
-
-              if [ "$(docker inspect -f '{{.State.Health.Status}}' "$DB_CONT" 2>/dev/null || echo starting)" = "healthy" ]; then
-                echo "===> DB backup"
-                TS=$(date +%Y%m%d_%H%M%S)
-                MYSQL_PWD="${DB_ROOT_PASSWORD_VAL:-root}" docker compose -f "$COMPOSE_FILE" exec -T "$DB_SVC" \
-                  mysqldump -uroot "${DB_DATABASE_VAL:-laravel}" > "backup_${TS}.sql" || true
-                # rotasi backup: simpan 5 terakhir
-                ls -t backup_*.sql 2>/dev/null | tail -n +6 | xargs -r rm -f || true
-              fi
-            fi
-
-            echo "===> Up containers (db + app) with --remove-orphans"
-            if has_service "$DB_SVC"; then
-              docker compose -f "$COMPOSE_FILE" up -d "$DB_SVC" --remove-orphans
-            fi
-            docker compose -f "$COMPOSE_FILE" up -d "$APP_SVC" --remove-orphans
-
-            echo "===> Wait app health"
-            # Jika image app punya HEALTHCHECK, pakai inspect; kalau tidak, fallback pgrep php-fpm
-            APP_DEADLINE=$(( $(date +%s) + 180 ))
-            HEALTH="unknown"
-            while true; do
-              HEALTH="$(docker inspect -f '{{.State.Health.Status}}' "$APP_CONT" 2>/dev/null || echo "nohealth")"
-              if [ "$HEALTH" = "healthy" ]; then
-                break
-              fi
-              if [ "$HEALTH" = "nohealth" ]; then
-                # fallback: cek proses php-fpm di dalam container
-                if docker compose -f "$COMPOSE_FILE" exec -T "$APP_SVC" sh -lc "pgrep php-fpm >/dev/null"; then
-                  break
-                fi
-              fi
-              [ "$(date +%s)" -gt "$APP_DEADLINE" ] && { docker compose -f "$COMPOSE_FILE" logs "$APP_SVC" --tail=200 || true; exit 1; }
-              sleep 3
-            done
-
-            echo "===> Run migrations & setup"
-            docker compose -f "$COMPOSE_FILE" exec -T "$APP_SVC" php artisan migrate --force
-            docker compose -f "$COMPOSE_FILE" exec -T "$APP_SVC" php artisan cache:table || true
-            docker compose -f "$COMPOSE_FILE" exec -T "$APP_SVC" php artisan session:table || true
-            docker compose -f "$COMPOSE_FILE" exec -T "$APP_SVC" php artisan queue:table || true
-            docker compose -f "$COMPOSE_FILE" exec -T "$APP_SVC" php artisan migrate --force
-            docker compose -f "$COMPOSE_FILE" exec -T "$APP_SVC" php artisan storage:link || true
-            docker compose -f "$COMPOSE_FILE" exec -T "$APP_SVC" php artisan cache:clear || true
-            docker compose -f "$COMPOSE_FILE" exec -T "$APP_SVC" php artisan config:clear || true
-            docker compose -f "$COMPOSE_FILE" exec -T "$APP_SVC" php artisan config:cache || true
-
-            echo "===> Reload Caddy (jika ada)"
-            sudo systemctl reload caddy || true
-
-            echo "===> Cleanup dangling images (older than 24h)"
-            docker image prune -af --filter "until=24h" || true
-
-            echo "===> Compose ps"
-            docker compose -f "$COMPOSE_FILE" ps

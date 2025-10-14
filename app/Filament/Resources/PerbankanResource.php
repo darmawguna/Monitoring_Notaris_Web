@@ -28,9 +28,11 @@ use Filament\Infolists\Infolist;
 use Filament\Infolists\Components\ViewEntry;
 use Illuminate\Database\Eloquent\Builder;
 use Filament\Infolists\Components\ImageEntry;
+use Illuminate\Support\Facades\DB;
 use Filament\Infolists\Components\Actions\Action;
 use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Model;
+use App\Enums\BerkasStatus;
 class PerbankanResource extends Resource
 {
     protected static ?string $model = Perbankan::class;
@@ -71,10 +73,17 @@ class PerbankanResource extends Resource
         $query = parent::getEloquentQuery();
 
         // Jika pengguna BUKAN Superadmin atau FrontOffice, filter daftar berkasnya.
-        if (!in_array($user->role->name, ['Superadmin', 'FrontOffice'])) {
+        if (!in_array($user->role->name, ['Superadmin'])) {
             // Tampilkan hanya berkas Perbankan di mana pengguna ini memiliki tugas 'pending'
             return $query->whereHas('progress', function (Builder $q) use ($user) {
                 $q->where('assignee_id', $user->id)->where('status', 'pending');
+            });
+        }
+        if ($user->role->name === 'Petugas Entry') {
+            // Tampilkan berkas yang 'selesai' ATAU berkas yang dibuat oleh mereka
+            return $query->where(function (Builder $query) use ($user) {
+                $query->where('status_overall', BerkasStatus::SELESAI)
+                    ->orWhere('created_by', $user->id);
             });
         }
 
@@ -99,10 +108,6 @@ class PerbankanResource extends Resource
             ->exists();
     }
 
-    public static function canEdit(Model $record): bool
-    {
-        return auth()->user()->role->name === 'Superadmin';
-    }
     public static function form(Form $form): Form
     {
         return $form
@@ -197,17 +202,23 @@ class PerbankanResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            // --- PERBAIKAN: Hapus getTableQuery(), modifikasi query di sini ---
+            ->query(
+                Perbankan::query()
+                    // Gunakan orderByRaw untuk mengurutkan berdasarkan hasil perhitungan
+                    ->orderByRaw('DATE_ADD(tanggal_covernote, INTERVAL jangka_waktu MONTH) asc')
+            )
             ->columns([
                 TextColumn::make('nama_debitur')
                     ->label('Nama Debitur')
                     ->searchable(),
-                TextColumn::make('tipe_pemohon')
-                    ->label('Tipe'),
-                TextColumn::make('jangka_waktu')
-                    ->label('Jangka Waktu')
-                    ->formatStateUsing(fn(string $state): string => "{$state} Bulan"),
+
+                TextColumn::make('nama_kreditur')
+                    ->label('Nama Kreditur'),
+
+                // --- PERBAIKAN: Kolom Tanggal Berakhir sekarang menjadi Tanggal Deadline ---
                 TextColumn::make('tanggal_covernote')
-                    ->label('Tanggal Berakhir')
+                    ->label('Tanggal Deadline')
                     ->date('d M Y')
                     ->formatStateUsing(function ($record): string {
                         if (!$record->tanggal_covernote || !$record->jangka_waktu) {
@@ -217,6 +228,28 @@ class PerbankanResource extends Resource
                             ->addMonths($record->jangka_waktu)
                             ->translatedFormat('d F Y');
                     }),
+
+                // --- PERBAIKAN: Tambahkan Kolom Sisa Hari dengan Logika yang Benar ---
+                TextColumn::make('sisa_hari')
+                    ->label('Sisa Hari')
+                    ->state(function (Perbankan $record): ?int {
+                        if (!$record->tanggal_covernote || !$record->jangka_waktu) {
+                            return null;
+                        }
+                        $deadline = Carbon::parse($record->tanggal_covernote)->addMonths($record->jangka_waktu);
+                        return Carbon::now()->diffInDays($deadline, false);
+                    })
+                    ->formatStateUsing(function (?int $state): string {
+                        if (is_null($state))
+                            return '-';
+                        if ($state < 0)
+                            return 'Terlewat ' . ($state * -1) . ' hari';
+                        if ($state === 0)
+                            return 'Hari Ini';
+                        return $state . ' hari lagi';
+                    })
+                    ->color(fn(?int $state): string => ($state !== null && $state <= 7) ? 'danger' : 'primary'),
+
                 TextColumn::make('created_at')
                     ->label('Tanggal Dibuat')
                     ->dateTime('d M Y')

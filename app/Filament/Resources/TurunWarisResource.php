@@ -22,7 +22,7 @@ use Filament\Infolists\Components\ViewEntry;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
-
+use App\Enums\BerkasStatus;
 class TurunWarisResource extends Resource
 {
     protected static ?string $model = TurunWaris::class;
@@ -40,10 +40,18 @@ class TurunWarisResource extends Resource
         $query = parent::getEloquentQuery();
 
         // Jika pengguna BUKAN Superadmin atau FrontOffice, filter daftar berkasnya.
-        if (!in_array($user->role->name, ['Superadmin', 'FrontOffice'])) {
+        if (!in_array($user->role->name, ['Superadmin'])) {
             // Tampilkan hanya berkas Perbankan di mana pengguna ini memiliki tugas 'pending'
             return $query->whereHas('progress', function (Builder $q) use ($user) {
                 $q->where('assignee_id', $user->id)->where('status', 'pending');
+            });
+        }
+
+        if ($user->role->name === 'Petugas Entry') {
+            // Tampilkan berkas yang 'selesai' ATAU berkas yang dibuat oleh mereka
+            return $query->where(function (Builder $query) use ($user) {
+                $query->where('status_overall', BerkasStatus::SELESAI)
+                    ->orWhere('created_by', $user->id);
             });
         }
 
@@ -57,7 +65,7 @@ class TurunWarisResource extends Resource
         $user = auth()->user();
 
         // Superadmin & FrontOffice selalu bisa melihat detail apapun.
-        if (in_array($user->role->name, ['Superadmin', 'FrontOffice'])) {
+        if (in_array($user->role->name, ['Superadmin'])) {
             return true;
         }
 

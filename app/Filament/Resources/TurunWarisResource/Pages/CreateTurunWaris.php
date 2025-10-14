@@ -77,4 +77,8 @@ class CreateTurunWaris extends CreateRecord
                 ->sendToDatabase($petugas2);
         }
     }
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('create');
+    }
 }

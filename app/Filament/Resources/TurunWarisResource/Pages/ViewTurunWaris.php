@@ -45,8 +45,8 @@ class ViewTurunWaris extends ViewRecord
                     /** @var \App\Models\Perbankan $record */
                     $record = $this->getRecord();
                     $nextRoleName = match ($record->current_stage_key) {
-                        StageKey::PETUGAS_2 => 'Pajak',
-                        StageKey::PAJAK => 'Petugas5',
+                        StageKey::PETUGAS_PENGETIKAN => 'Petugas Pajak',
+                        StageKey::PETUGAS_PAJAK => 'Petugas Penyiapan',
                         default => null,
                     };
                     if ($nextRoleName) {
@@ -78,8 +78,8 @@ class ViewTurunWaris extends ViewRecord
 
                     // Tentukan & buat tugas selanjutnya
                     $nextStage = match ($record->current_stage_key) {
-                        StageKey::PETUGAS_2 => StageKey::PAJAK,
-                        StageKey::PAJAK => StageKey::PETUGAS_5,
+                        StageKey::PETUGAS_PENGETIKAN => 'Petugas Pajak',
+                        StageKey::PETUGAS_PAJAK => 'Petugas Penyiapan',
                         default => null,
                     };
                     $nextAssigneeId = $data['next_assignee_id'] ?? null;

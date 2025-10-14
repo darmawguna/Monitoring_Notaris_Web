@@ -16,10 +16,10 @@ class CustomLoginResponse implements LoginResponseContract
 
         // Tentukan URL tujuan berdasarkan peran pengguna
         $redirectUrl = match ($user->role->name) {
-            'FrontOffice' => BerkasResource::getUrl('create'),
+            'Petugas Entry' => BerkasResource::getUrl('create'),
             'Petugas2', 'Pajak', 'Petugas5' => TugasResource::getUrl('index'),
             // Default untuk Superadmin dan peran lainnya
-            default => '/admin/laporan', // Menggunakan path statis yang sudah kita buat
+            default => '/admin', // Menggunakan path statis yang sudah kita buat
         };
 
         return redirect()->intended($redirectUrl);

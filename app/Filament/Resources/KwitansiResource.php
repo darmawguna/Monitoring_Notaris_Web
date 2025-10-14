@@ -37,7 +37,7 @@ class KwitansiResource extends Resource
         $userRole = $user->role->name;
 
         // 1. Superadmin dan Front Office selalu bisa melihat.
-        if (in_array($userRole, ['Superadmin', 'FrontOffice'])) {
+        if (in_array($userRole, ['Superadmin', 'Petugas Entry'])) {
             return true;
         }
 

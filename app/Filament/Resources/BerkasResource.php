@@ -41,6 +41,7 @@ use Illuminate\Database\Eloquent\Model;
 use Filament\Infolists\Components\Actions; // Namespace untuk ActionsColumn
 use Filament\Support\Enums\Alignment;
 use Filament\Tables\Actions\ViewAction;
+use App\Enums\BerkasStatus;
 
 
 class BerkasResource extends Resource
@@ -78,10 +79,18 @@ class BerkasResource extends Resource
         $user = auth()->user();
         $query = parent::getEloquentQuery();
         // Jika pengguna BUKAN Superadmin atau FrontOffice, filter daftar berkasnya.
-        if (!in_array($user->role->name, ['Superadmin', 'FrontOffice'])) {
+        if (!in_array($user->role->name, ['Superadmin'])) {
             // Tampilkan hanya berkas di mana pengguna ini memiliki tugas yang 'pending'
             return $query->whereHas('progress', function (Builder $q) use ($user) {
                 $q->where('assignee_id', $user->id)->where('status', 'pending');
+            });
+        }
+
+        if ($user->role->name === 'Petugas Entry') {
+            // Tampilkan berkas yang 'selesai' ATAU berkas yang dibuat oleh mereka
+            return $query->where(function (Builder $query) use ($user) {
+                $query->where('status_overall', BerkasStatus::SELESAI)
+                    ->orWhere('created_by', $user->id);
             });
         }
 
@@ -98,7 +107,7 @@ class BerkasResource extends Resource
         $user = auth()->user();
 
         // Superadmin & FrontOffice selalu bisa melihat detail apapun.
-        if (in_array($user->role->name, ['Superadmin', 'FrontOffice'])) {
+        if (in_array($user->role->name, ['Superadmin'])) {
             return true;
         }
 
@@ -110,10 +119,10 @@ class BerkasResource extends Resource
             ->exists();
     }
 
-    public static function canEdit(Model $record): bool
-    {
-        return auth()->user()->role->name === 'Superadmin';
-    }
+    // public static function canEdit(Model $record): bool
+    // {
+    //     return auth()->user()->role->name === 'Superadmin';
+    // }
 
 
     public static function form(Form $form): Form

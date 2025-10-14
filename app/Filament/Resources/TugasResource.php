@@ -25,6 +25,7 @@ use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use App\Enums\BerkasStatus;
 
 class TugasResource extends Resource
 {
@@ -188,7 +189,31 @@ class TugasResource extends Resource
                             Notification::make()->title('Anda menerima tugas baru!')->sendToDatabase($nextAssignee);
                         } else {
                             // Jika tidak ada, selesaikan parent record
-                            $parentRecord->update(['status_overall' => 'selesai', 'current_stage_key' => StageKey::SELESAI]);
+                            $parentRecord->update([
+                                'status_overall' => BerkasStatus::SELESAI,
+                                'current_stage_key' => StageKey::PENYERAHAN, // Tahap sekarang adalah Penyerahan
+                            ]);
+
+                            // Cari semua pengguna dengan peran FrontOffice
+                            $frontOfficeUsers = User::whereHas('role', fn($q) => $q->where('name', 'FrontOffice'))->get();
+
+                            // Buat tugas 'pending' untuk setiap pengguna FrontOffice
+                            foreach ($frontOfficeUsers as $foUser) {
+                                $parentRecord->progress()->create([
+                                    'stage_key' => StageKey::PENYERAHAN,
+                                    'status' => 'pending',
+                                    'assignee_id' => $foUser->id,
+                                    'notes' => 'Berkas telah menyelesaikan alur kerja dan siap untuk diserahkan/diarsipkan.',
+                                ]);
+                            }
+
+                            // Kirim notifikasi ke semua pengguna FrontOffice
+                            if ($frontOfficeUsers->isNotEmpty()) {
+                                Notification::make()
+                                    ->title('Berkas Selesai: Siap untuk Penyerahan')
+                                    ->body("Berkas '{$parentRecord->nomor_berkas}' telah menyelesaikan alur pengerjaan.")
+                                    ->sendToDatabase($frontOfficeUsers);
+                            }
                         }
                         Notification::make()->title('Tugas berhasil diproses')->success()->send();
                     }),

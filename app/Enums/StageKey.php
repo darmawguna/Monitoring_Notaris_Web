@@ -9,5 +9,6 @@ enum StageKey: string
     case PETUGAS_PAJAK = 'petugas pajak';
     case PETUGAS_PENYIAPAN = 'petugas penyiapan';
     case PETUGAS_BPN = 'petugas bpn';
+    case PENYERAHAN = 'penyerahan';
     case SELESAI = 'selesai';
 }

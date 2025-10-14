@@ -20,40 +20,52 @@ class UserSeeder extends Seeder
 
         $usersData = [
             [
-                'name' => 'Superadmin',
-                'email_prefix' => 'superadmin', // Gunakan prefix, bukan email lengkap
+                'name' => 'Komang Hendy',
+                'email_prefix' => 'hendy.superadmin', // Gunakan prefix, bukan email lengkap
                 'password' => 'password',
                 'roleName' => 'Superadmin',
             ],
             [
-                'name' => 'Petugas Front Office',
-                'email_prefix' => 'frontoffice',
+                'name' => 'Ayu',
+                'email_prefix' => 'ayu.entry',
                 'password' => 'password',
                 'roleName' => 'Petugas Entry',
             ],
             [
-                'name' => 'Petugas Pengetikan A',
-                'email_prefix' => 'petugas2a',
+                'name' => 'IGA Intan Karisma',
+                'email_prefix' => 'iga.intan',
                 'password' => 'password',
                 'roleName' => 'Petugas Pengetikan',
             ],
             [
-                'name' => 'Petugas Pengetikan B',
-                'email_prefix' => 'petugas2b',
+                'name' => 'Jesika Elsa',
+                'email_prefix' => 'jesika.elsa',
                 'password' => 'password',
                 'roleName' => 'Petugas Pengetikan',
             ],
             [
-                'name' => 'Petugas Pajak',
-                'email_prefix' => 'pajak',
+                'name' => 'Made Alit Handra',
+                'email_prefix' => 'made.alit',
                 'password' => 'password',
                 'roleName' => 'Petugas Pajak',
             ],
             [
-                'name' => 'Petugas Penyiapan',
-                'email_prefix' => 'petugas5',
+                'name' => 'Suci Tulasiani',
+                'email_prefix' => 'suci',
                 'password' => 'password',
                 'roleName' => 'Petugas Penyiapan',
+            ],
+            [
+                'name' => 'Ida Ayu Dita',
+                'email_prefix' => 'dayu.dita',
+                'password' => 'password',
+                'roleName' => 'Petugas Penyiapan',
+            ],
+            [
+                'name' => 'Ketut Arta Saputra',
+                'email_prefix' => 'arta.saputra',
+                'password' => 'password',
+                'roleName' => 'Petugas BPN',
             ],
         ];
 

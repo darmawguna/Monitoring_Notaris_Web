@@ -23,7 +23,7 @@ class ListBerkas extends ListRecords
                     // adalah 'Superadmin' atau 'FrontOffice'.
                     // Catatan: Saya mengasumsikan 'petugasentry' adalah 'FrontOffice'.
                     // Anda bisa mengubahnya jika nama perannya berbeda.
-                    return in_array($user->role->name, ['Superadmin', 'FrontOffice']);
+                    return in_array($user->role->name, ['Superadmin', 'Petugas Entry']);
                 }),
         ];
     }
