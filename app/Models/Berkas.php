@@ -16,6 +16,7 @@ class Berkas extends Model
 {
     use HasFactory, HasProgress;
 
+    // TODO 
     protected $fillable = [
         'nomor_berkas',
         'nama_berkas',
