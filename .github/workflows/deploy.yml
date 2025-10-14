@@ -11,20 +11,6 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      # Langkah baru: Dapatkan "nomor seri" (commit SHA) dari build yang berhasil
-      - name: Get workflow details
-        uses: actions/github-script@v7
-        id: workflow
-        with:
-          script: |
-            const run = await github.rest.actions.getWorkflowRun({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: context.payload.workflow_run.id
-            });
-            const sha = run.data.head_commit.id; // Ambil ID commit
-            core.setOutput('sha_short', sha.substring(0, 7));
-
       - name: Deploy to Server via SSH
         uses: appleboy/ssh-action@v1.1.0
         with:
@@ -37,31 +23,32 @@ jobs:
             PROJECT_DIR="/home/projectdarma/Monitoring_Notaris_Web"
             cd "$PROJECT_DIR"
 
-            echo "🔄 Menarik kode terbaru (untuk docker-compose.yml, dll)..."
+            echo "🔄 Menarik kode terbaru..."
             git fetch origin
             git reset --hard origin/main
 
-            # Perubahan Kunci 1: Tulis "nomor seri" ke papan pengumuman
-            echo "IMAGE_TAG=${{ steps.workflow.outputs.sha_short }}" > .env.compose
+            # --- PERBAIKAN DI SINI ---
+            # Dapatkan SHA pendek dari pemicu workflow
+            echo "IMAGE_TAG=${{ github.event.workflow_run.head_commit.id_short }}" > .env.compose
 
             echo "📦 Pull image Docker terbaru dengan nomor seri yang benar..."
-            # Perubahan Kunci 2: Gunakan .env.compose untuk semua perintah
-            docker compose --env-file .env.compose pull
+            # Muat variabel dari .env DAN .env.compose
+            docker compose --env-file .env --env-file .env.compose pull
 
             echo "⏹️ Menghentikan layanan yang sedang berjalan..."
-            docker compose --env-file .env.compose down --remove-orphans
+            docker compose --env-file .env --env-file .env.compose down --remove-orphans
 
             echo "🚀 Menjalankan ulang semua layanan..."
-            docker compose --env-file .env.compose up -d
+            docker compose --env-file .env --env-file .env.compose up -d
 
             echo "⏳ Menunggu database siap..."
             sleep 15
 
             echo "🔧 Menjalankan migrasi database..."
-            docker compose --env-file .env.compose exec -T app php artisan migrate --force
+            docker compose --env-file .env --env-file .env.compose exec -T app php artisan migrate --force
 
             echo "🧹 Membersihkan cache aplikasi..."
-            docker compose --env-file .env.compose exec -T app php artisan optimize:clear
+            docker compose --env-file .env --env-file .env.compose exec -T app php artisan optimize:clear
 
             echo "🔁 Memuat ulang Caddy..."
             sudo systemctl reload caddy

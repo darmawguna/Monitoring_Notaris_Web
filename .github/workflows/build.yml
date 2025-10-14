@@ -27,6 +27,6 @@ jobs:
           push: true
           tags: |
             darmawiguna/docuhub:latest
-            darmawiguna/docuhub:${{ github.sha }}
+            darmawiguna/docuhub:${{ github.sha_short }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
