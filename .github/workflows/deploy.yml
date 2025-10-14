@@ -11,6 +11,11 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
+      # --- PERBAIKAN DI SINI: Langkah baru untuk mendapatkan SHA pendek ---
+      - name: Get short SHA from triggering workflow
+        id: get_sha
+        run: echo "sha_short=$(echo ${{ github.event.workflow_run.head_sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+
       - name: Deploy to Server via SSH
         uses: appleboy/ssh-action@v1.1.0
         with:
@@ -27,9 +32,8 @@ jobs:
             git fetch origin
             git reset --hard origin/main
 
-            # --- PERBAIKAN DI SINI ---
-            # Dapatkan 7 karakter pertama dari SHA commit yang memicu build
-            echo "IMAGE_TAG=${{ substr(github.event.workflow_run.head_sha, 0, 7) }}" > .env.compose
+            # Gunakan output dari langkah 'get_sha' di atas
+            echo "IMAGE_TAG=${{ steps.get_sha.outputs.sha_short }}" > .env.compose
 
             echo "📦 Pull image Docker terbaru dengan nomor seri yang benar..."
             docker compose --env-file .env --env-file .env.compose pull
