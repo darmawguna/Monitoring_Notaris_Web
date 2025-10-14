@@ -1,23 +1,25 @@
 <?php
 
 namespace App\Filament\Resources\TurunWarisResource\Pages;
-use App\Filament\Resources\TurunWarisResource;
-use Filament\Actions;
-use Filament\Resources\Pages\ViewRecord;
-use Filament\Actions\Action;
-use App\Models\User;
-use Illuminate\Support\Carbon;
-use App\Models\DeadlineConfig;
-use Filament\Notifications\Notification;
+
+use App\Enums\BerkasStatus;
 use App\Enums\StageKey;
+use App\Filament\Resources\TugasResource;
+use App\Filament\Resources\TurunWarisResource;
+use App\Models\DeadlineConfig;
+use App\Models\User;
+use Filament\Actions;
+use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
-use App\Filament\Resources\TugasResource;
+use Filament\Notifications\Notification;
+use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Support\Carbon;
+
 class ViewTurunWaris extends ViewRecord
 {
     protected static string $resource = TurunWarisResource::class;
 
-    // Opsional: Tambahkan tombol "Edit" di pojok kanan atas halaman View
     protected function getHeaderActions(): array
     {
         return [
@@ -25,24 +27,18 @@ class ViewTurunWaris extends ViewRecord
             Action::make('processTask')
                 ->label('Proses Tugas Ini')
                 ->icon('heroicon-o-arrow-right-circle')
-                // 1. Logika Visibilitas
+                // Logika visibilitas dan form Anda sudah benar
                 ->visible(function (): bool {
                     $user = auth()->user();
                     /** @var \App\Models\TurunWaris $record */
                     $record = $this->getRecord();
-
-                    if (in_array($user->role->name, ['Superadmin', 'FrontOffice'])) {
+                    if (in_array($user->role->name, ['Superadmin', 'FrontOffice', 'Petugas Entry'])) {
                         return false;
                     }
-
-                    return $record->progress()
-                        ->where('assignee_id', $user->id)
-                        ->where('status', 'pending')
-                        ->exists();
+                    return $record->progress()->where('assignee_id', $user->id)->where('status', 'pending')->exists();
                 })
-                // 2. Logika Form
                 ->form(function () {
-                    /** @var \App\Models\Perbankan $record */
+                    /** @var \App\Models\TurunWaris $record */
                     $record = $this->getRecord();
                     $nextRoleName = match ($record->current_stage_key) {
                         StageKey::PETUGAS_PENGETIKAN => 'Petugas Pajak',
@@ -52,21 +48,19 @@ class ViewTurunWaris extends ViewRecord
                     if ($nextRoleName) {
                         return [
                             Textarea::make('notes')->label('Catatan Pengerjaan')->required(),
-                            Select::make('next_assignee_id')
-                                ->label("Teruskan ke Petugas {$nextRoleName}")
-                                ->options(User::whereHas('role', fn($q) => $q->where('name', $nextRoleName))->pluck('name', 'id'))
-                                ->searchable()->preload()->required(),
+                            Select::make('next_assignee_id')->label("Teruskan ke Petugas {$nextRoleName}")->options(User::whereHas('role', fn($q) => $q->where('name', $nextRoleName))->pluck('name', 'id'))->searchable()->preload()->required(),
                         ];
                     }
                     return [Textarea::make('notes')->label('Catatan Pengerjaan Final')->required()];
                 })
-                // 3. Logika Aksi
+
+                // --- INI BAGIAN YANG DIPERBARUI SECARA TOTAL ---
                 ->action(function (array $data): void {
                     $user = auth()->user();
-                    /** @var \App\Models\Perbankan $record */
+                    /** @var \App\Models\TurunWaris $record */
                     $record = $this->getRecord();
 
-                    // Selesaikan tugas saat ini
+                    // 1. Selesaikan tugas saat ini
                     $currentProgress = $record->progress()->where('assignee_id', $user->id)->where('status', 'pending')->first();
                     if ($currentProgress) {
                         $currentProgress->update([
@@ -76,14 +70,15 @@ class ViewTurunWaris extends ViewRecord
                         ]);
                     }
 
-                    // Tentukan & buat tugas selanjutnya
+                    // 2. Tentukan tahap selanjutnya
                     $nextStage = match ($record->current_stage_key) {
-                        StageKey::PETUGAS_PENGETIKAN => 'Petugas Pajak',
-                        StageKey::PETUGAS_PAJAK => 'Petugas Penyiapan',
+                        StageKey::PETUGAS_PENGETIKAN => StageKey::PETUGAS_PAJAK,
+                        StageKey::PETUGAS_PAJAK => StageKey::PETUGAS_PENYIAPAN,
                         default => null,
                     };
                     $nextAssigneeId = $data['next_assignee_id'] ?? null;
 
+                    // 3. Jika ADA tahap selanjutnya, teruskan seperti biasa
                     if ($nextStage && $nextAssigneeId) {
                         $deadlineDays = DeadlineConfig::where('stage_key', $nextStage)->value('default_days') ?? 3;
                         $deadline = Carbon::now()->addDays($deadlineDays);
@@ -97,13 +92,42 @@ class ViewTurunWaris extends ViewRecord
                         $record->update(['current_stage_key' => $nextStage]);
 
                         $nextAssignee = User::find($nextAssigneeId);
-                        Notification::make()->title('Anda menerima tugas baru!')->sendToDatabase($nextAssignee);
+                        if ($nextAssignee) {
+                            Notification::make()->title('Anda menerima tugas baru!')->sendToDatabase($nextAssignee);
+                        }
                     } else {
-                        $record->update(['status_overall' => 'selesai', 'current_stage_key' => StageKey::SELESAI]);
+                        // 4. Jika TIDAK ADA tahap selanjutnya, buat tugas "Penyerahan" untuk Petugas Entry
+                        $record->update([
+                            'status_overall' => BerkasStatus::SELESAI,
+                            'current_stage_key' => StageKey::PENYERAHAN,
+                        ]);
+
+                        // Ganti 'Petugas Entry' dengan nama peran Anda yang benar
+                        $frontOfficeUsers = User::whereHas('role', fn($q) => $q->where('name', 'Petugas Entry'))->get();
+
+                        foreach ($frontOfficeUsers as $foUser) {
+                            $record->progress()->create([
+                                'stage_key' => StageKey::PENYERAHAN,
+                                'status' => 'pending',
+                                'assignee_id' => $foUser->id,
+                                'notes' => 'Berkas Turun Waris telah menyelesaikan alur kerja dan siap untuk diserahkan/diarsipkan.',
+                            ]);
+                        }
+
+                        if ($frontOfficeUsers->isNotEmpty()) {
+                            // Gunakan 'nama_kasus' sebagai identifier untuk notifikasi
+                            $identifier = $record->nama_kasus;
+                            Notification::make()
+                                ->title('Berkas Selesai: Siap untuk Penyerahan')
+                                ->body("Berkas Turun Waris '{$identifier}' telah menyelesaikan alur pengerjaan.")
+                                ->icon('heroicon-o-users') // Ikon yang relevan
+                                ->sendToDatabase($frontOfficeUsers);
+                        }
                     }
+
                     Notification::make()->title('Tugas berhasil diproses')->success()->send();
 
-                    // 4. Redirect kembali ke halaman "Tugas Saya"
+                    // Arahkan kembali ke halaman "Tugas Saya"
                     $this->redirect(TugasResource::getUrl('index'));
                 }),
         ];

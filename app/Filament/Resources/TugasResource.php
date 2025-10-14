@@ -51,7 +51,7 @@ class TugasResource extends Resource
     public static function canViewAny(): bool
     {
         $userRole = auth()->user()->role->name;
-        return !in_array($userRole, ['Superadmin', 'FrontOffice']);
+        return !in_array($userRole, ['Superadmin']);
     }
 
     public static function form(Form $form): Form
@@ -163,41 +163,40 @@ class TugasResource extends Resource
                         ]);
 
                         // 2. Tentukan tahap selanjutnya
-                        $nextStage = null;
+                        $nextStage = match ($parentRecord->current_stage_key) {
+                            StageKey::PETUGAS_PENGETIKAN => StageKey::PETUGAS_PAJAK,
+                            StageKey::PETUGAS_PAJAK => StageKey::PETUGAS_PENYIAPAN,
+                            default => null,
+                        };
                         $nextAssigneeId = $data['next_assignee_id'] ?? null;
-                        if ($parentRecord->current_stage_key === StageKey::PETUGAS_PENGETIKAN)
-                            $nextStage = StageKey::PETUGAS_PAJAK;
-                        if ($parentRecord->current_stage_key === StageKey::PETUGAS_PAJAK)
-                            $nextStage = StageKey::PETUGAS_PENYIAPAN;
 
-                        // 3. Jika ada tahap selanjutnya, buat tugas baru dan update parent
+                        // 3. Jika ADA tahap selanjutnya, teruskan seperti biasa
                         if ($nextStage && $nextAssigneeId) {
-                            $deadlineDays = \App\Models\DeadlineConfig::where('stage_key', $nextStage)->value('default_days') ?? 3; // Default 3 hari
+                            $deadlineDays = \App\Models\DeadlineConfig::where('stage_key', $nextStage)->value('default_days') ?? 3;
                             $deadline = \Illuminate\Support\Carbon::now()->addDays($deadlineDays);
 
-                            // BUAT CATATAN PROGRES BARU DENGAN DEADLINE
                             $parentRecord->progress()->create([
                                 'stage_key' => $nextStage,
                                 'status' => 'pending',
                                 'assignee_id' => $nextAssigneeId,
-                                'deadline' => $deadline, // <-- Tambahkan deadline di sini
+                                'deadline' => $deadline,
                             ]);
                             $parentRecord->update(['current_stage_key' => $nextStage]);
 
-                            // Kirim Notifikasi
                             $nextAssignee = User::find($nextAssigneeId);
-                            Notification::make()->title('Anda menerima tugas baru!')->sendToDatabase($nextAssignee);
+                            if ($nextAssignee) {
+                                Notification::make()->title('Anda menerima tugas baru!')->sendToDatabase($nextAssignee);
+                            }
                         } else {
-                            // Jika tidak ada, selesaikan parent record
+                            // 4. Jika TIDAK ADA tahap selanjutnya, buat tugas "Penyerahan" untuk Front Office
                             $parentRecord->update([
                                 'status_overall' => BerkasStatus::SELESAI,
-                                'current_stage_key' => StageKey::PENYERAHAN, // Tahap sekarang adalah Penyerahan
+                                'current_stage_key' => StageKey::PENYERAHAN,
                             ]);
 
-                            // Cari semua pengguna dengan peran FrontOffice
-                            $frontOfficeUsers = User::whereHas('role', fn($q) => $q->where('name', 'FrontOffice'))->get();
+                            // Ganti 'Petugas Entry' dengan nama peran Anda yang benar jika berbeda
+                            $frontOfficeUsers = User::whereHas('role', fn($q) => $q->where('name', 'Petugas Entry'))->get();
 
-                            // Buat tugas 'pending' untuk setiap pengguna FrontOffice
                             foreach ($frontOfficeUsers as $foUser) {
                                 $parentRecord->progress()->create([
                                     'stage_key' => StageKey::PENYERAHAN,
@@ -207,11 +206,11 @@ class TugasResource extends Resource
                                 ]);
                             }
 
-                            // Kirim notifikasi ke semua pengguna FrontOffice
                             if ($frontOfficeUsers->isNotEmpty()) {
+                                $identifier = $parentRecord->nomor_berkas ?? $parentRecord->nama_kasus ?? $parentRecord->nama_debitur ?? 'sebuah berkas';
                                 Notification::make()
                                     ->title('Berkas Selesai: Siap untuk Penyerahan')
-                                    ->body("Berkas '{$parentRecord->nomor_berkas}' telah menyelesaikan alur pengerjaan.")
+                                    ->body("Berkas '{$identifier}' telah menyelesaikan alur pengerjaan.")
                                     ->sendToDatabase($frontOfficeUsers);
                             }
                         }
