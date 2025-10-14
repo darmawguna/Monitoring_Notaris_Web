@@ -22,7 +22,7 @@ services:
       - "127.0.0.1:9002:8080"
     volumes:
       # Mount public directory dari app_volume agar Nginx bisa menyajikan file
-      - app_code:/var/www/html:ro
+      - ./public:/var/www/html/public:ro
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     networks: [docuhub_network]
     depends_on: [app]
