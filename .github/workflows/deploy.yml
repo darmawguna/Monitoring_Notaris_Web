@@ -4,7 +4,7 @@ on:
   workflow_run:
     workflows: ["Build & Push Image (Docker Hub)"]
     types: [completed]
-    branches: [main]
+    branches: [production]
 
 jobs:
   deploy:

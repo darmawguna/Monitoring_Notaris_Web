@@ -2,13 +2,14 @@ version: '3.8'
 
 services:
   app:
-    image: darmawiguna/docuhub:${IMAGE_TAG}
+    build:
+      context: . # <-- Beritahu Docker untuk build dari direktori ini
     container_name: docuhub_app
     restart: unless-stopped
     env_file: [.env]
     volumes:
-      - app_code:/var/www/html          # Mount seluruh kode aplikasi ke volume bersama
-      - ./storage:/var/www/html/storage # Mount storage untuk persistensi data upload
+      # Mount storage untuk persistensi
+      - ./storage:/var/www/html/storage
     networks: [docuhub_network]
     depends_on:
       db:
@@ -19,9 +20,10 @@ services:
     container_name: docuhub_web
     restart: unless-stopped
     ports:
-      - "127.0.0.1:9002:8080"
+      - "127.0.0.1:9002:80"
     volumes:
-      - app_code:/var/www/html:ro       # Nginx baca dari volume yang sama (read-only)
+      # Mount HANYA folder public dari host
+      - ./public:/var/www/html/public:ro
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     networks: [docuhub_network]
     depends_on: [app]
@@ -45,26 +47,26 @@ services:
       retries: 5
 
   queue:
-    image: darmawiguna/docuhub:latest
+    build:
+      context: . # <-- Bangun dari direktori ini juga
     container_name: docuhub_queue
     restart: unless-stopped
     command: php artisan queue:work --sleep=3 --tries=3 --max-time=3600
     env_file: [.env]
     volumes:
-      - app_code:/var/www/html          # Gunakan volume app_code agar bisa akses kode
-      - ./storage:/var/www/html/storage # Persistensi storage
+      - ./storage:/var/www/html/storage
     networks: [docuhub_network]
     depends_on: [app, db]
 
   schedule:
-    image: darmawiguna/docuhub:latest
+    build:
+      context: . # <-- Bangun dari direktori ini juga
     container_name: docuhub_schedule
     restart: unless-stopped
     command: sh -c "while [ true ]; do php artisan schedule:run --verbose --no-interaction & sleep 60; done"
     env_file: [.env]
     volumes:
-      - app_code:/var/www/html          # Gunakan volume app_code agar bisa akses kode
-      - ./storage:/var/www/html/storage # Persistensi storage
+      - ./storage:/var/www/html/storage
     networks: [docuhub_network]
     depends_on: [app, db]
 
@@ -74,6 +76,4 @@ networks:
 
 volumes:
   db_data:
-    driver: local
-  app_code:  # Volume bersama untuk kode aplikasi
     driver: local
