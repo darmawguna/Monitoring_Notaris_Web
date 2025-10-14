@@ -133,3 +133,4 @@ networks:
 volumes:
   db_data:
     driver: local
+  app_code:
