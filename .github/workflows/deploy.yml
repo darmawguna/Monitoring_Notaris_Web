@@ -17,24 +17,27 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
-          port: 2607 # Ganti jika perlu
+          port: 2607
           script: |
-            set -e # Hentikan skrip jika ada error
-            cd /home/projectdarma/Monitoring_Notaris_Web # Ganti path jika perlu
+            set -e
+            cd /home/projectdarma/Monitoring_Notaris_Web
 
             echo "===> Pull image terbaru dari Docker Hub"
             docker compose pull
 
-            echo "===> Hentikan dan jalankan kembali semua layanan dengan image baru"
+            echo "===> Hentikan kontainer yang sedang berjalan (jika ada)"
+            docker compose down
+
+            echo "===> Jalankan kembali semua layanan dengan image baru"
             docker compose up -d
 
             echo "===> Jalankan perintah pasca-deployment"
-            # Jalankan migrasi di dalam kontainer 'app'
-            docker compose exec -T app php artisan migrate --force 
-            
+            docker compose exec -T app php artisan migrate --force
+            docker compose exec -T app php artisan optimize:clear
+            docker compose exec -T app php artisan storage:link
+
             echo "===> Reload Caddy dan bersihkan image lama"
             sudo systemctl reload caddy
             docker image prune -f
 
             echo "===> Deploy selesai!"
-
