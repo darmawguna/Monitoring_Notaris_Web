@@ -20,24 +20,45 @@ jobs:
           port: 2607
           script: |
             set -e
-            cd /home/projectdarma/Monitoring_Notaris_Web
 
-            echo "===> Pull image terbaru dari Docker Hub"
+            PROJECT_DIR="/home/projectdarma/Monitoring_Notaris_Web"
+            cd "$PROJECT_DIR"
+
+            echo "✅ Memastikan direktori adalah Git repository..."
+            if [ ! -d ".git" ]; then
+              echo "❌ Direktori bukan Git repo. Pastikan Anda melakukan 'git clone' terlebih dahulu."
+              exit 1
+            fi
+
+            echo "🔄 Menarik kode terbaru dari branch main..."
+            git fetch origin
+            git reset --hard origin/main
+
+            echo "📦 Pull image Docker terbaru dari Docker Hub..."
             docker compose pull
 
-            echo "===> Hentikan kontainer yang sedang berjalan (jika ada)"
-            docker compose down
+            echo "⏹️ Menghentikan layanan yang sedang berjalan..."
+            docker compose down --remove-orphans
 
-            echo "===> Jalankan kembali semua layanan dengan image baru"
+            echo "🚀 Menjalankan ulang semua layanan dengan konfigurasi & image terbaru..."
             docker compose up -d
 
-            echo "===> Jalankan perintah pasca-deployment"
+            echo "⏳ Menunggu database siap..."
+            sleep 10
+
+            echo "🔧 Menjalankan migrasi database..."
             docker compose exec -T app php artisan migrate --force
+
+            echo "🧹 Membersihkan cache aplikasi..."
             docker compose exec -T app php artisan optimize:clear
+
+            echo "🔗 Membuat symbolic link storage..."
             docker compose exec -T app php artisan storage:link
 
-            echo "===> Reload Caddy dan bersihkan image lama"
+            echo "🔁 Memuat ulang Caddy (tanpa downtime)..."
             sudo systemctl reload caddy
+
+            echo "🗑️ Membersihkan image Docker yang tidak terpakai..."
             docker image prune -f
 
-            echo "===> Deploy selesai!"
+            echo "✅ Deploy berhasil! Aplikasi berjalan di https://docuhub.fmews.com"
