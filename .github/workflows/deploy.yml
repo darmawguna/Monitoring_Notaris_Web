@@ -28,11 +28,10 @@ jobs:
             git reset --hard origin/main
 
             # --- PERBAIKAN DI SINI ---
-            # Dapatkan SHA pendek dari pemicu workflow
-            echo "IMAGE_TAG=${{ github.event.workflow_run.head_commit.id_short }}" > .env.compose
+            # Dapatkan 7 karakter pertama dari SHA commit yang memicu build
+            echo "IMAGE_TAG=${{ substr(github.event.workflow_run.head_sha, 0, 7) }}" > .env.compose
 
             echo "📦 Pull image Docker terbaru dengan nomor seri yang benar..."
-            # Muat variabel dari .env DAN .env.compose
             docker compose --env-file .env --env-file .env.compose pull
 
             echo "⏹️ Menghentikan layanan yang sedang berjalan..."
