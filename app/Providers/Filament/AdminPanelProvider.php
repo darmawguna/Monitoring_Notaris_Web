@@ -54,6 +54,10 @@ class AdminPanelProvider extends PanelProvider
                 StatsOverview::class,
                 BerkasTerbaru::class,
                 KwitansiTerbaru::class,
+                \App\Filament\Widgets\TugasBerkasMasukWidget::class,
+                \App\Filament\Widgets\TugasPerbankanMasukWidget::class,
+                \App\Filament\Widgets\TugasTurunWarisMasukWidget::class,
+                \App\Filament\Widgets\BerkasSelesaiWidget::class,
             ])
             ->renderHook('panels::topbar.start', fn() => view('filament.partials.navbar-title'))
             ->renderHook('panels::head.end', fn() => view('filament.partials.sidebar-styles'))
