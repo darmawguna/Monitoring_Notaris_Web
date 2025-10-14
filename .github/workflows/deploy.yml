@@ -11,7 +11,6 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      # --- PERBAIKAN DI SINI: Langkah baru untuk mendapatkan SHA pendek ---
       - name: Get short SHA from triggering workflow
         id: get_sha
         run: echo "sha_short=$(echo ${{ github.event.workflow_run.head_sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
@@ -28,30 +27,35 @@ jobs:
             PROJECT_DIR="/home/projectdarma/Monitoring_Notaris_Web"
             cd "$PROJECT_DIR"
 
-            echo "🔄 Menarik kode terbaru..."
+            echo "🔄 Menarik file konfigurasi terbaru..."
             git fetch origin
             git reset --hard origin/main
 
-            # Gunakan output dari langkah 'get_sha' di atas
+            echo "🏷️ Menyiapkan tag image terbaru..."
             echo "IMAGE_TAG=${{ steps.get_sha.outputs.sha_short }}" > .env.compose
 
-            echo "📦 Pull image Docker terbaru dengan nomor seri yang benar..."
-            docker compose --env-file .env --env-file .env.compose pull
+            echo "📦 Pull image Docker terbaru dari Docker Hub..."
+            docker compose --env-file .env.compose pull
 
             echo "⏹️ Menghentikan layanan yang sedang berjalan..."
-            docker compose --env-file .env --env-file .env.compose down --remove-orphans
+            docker compose down --remove-orphans
 
-            echo "🚀 Menjalankan ulang semua layanan..."
-            docker compose --env-file .env --env-file .env.compose up -d
+            # --- PERBAIKAN UTAMA DI SINI ---
+            echo "💥 Menghapus volume kode lama untuk memastikan pembaruan..."
+            # Perintah `|| true` memastikan skrip tidak gagal jika volume belum ada
+            docker volume rm Monitoring_Notaris_Web_app_code || true
+
+            echo "🚀 Menjalankan ulang semua layanan dengan image & kode baru..."
+            docker compose --env-file .env.compose up -d
 
             echo "⏳ Menunggu database siap..."
             sleep 15
 
             echo "🔧 Menjalankan migrasi database..."
-            docker compose --env-file .env --env-file .env.compose exec -T app php artisan migrate --force
+            docker compose exec -T app php artisan migrate --force
 
             echo "🧹 Membersihkan cache aplikasi..."
-            docker compose --env-file .env --env-file .env.compose exec -T app php artisan optimize:clear
+            docker compose exec -T app php artisan optimize:clear
 
             echo "🔁 Memuat ulang Caddy..."
             sudo systemctl reload caddy
