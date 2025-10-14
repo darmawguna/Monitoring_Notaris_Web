@@ -1,31 +1,24 @@
-# =========================
-# 1) Base PHP (Alpine) + extensions for Laravel 12 + Filament v3
-# =========================
+
 FROM php:8.2-fpm-alpine AS php_base
 
-# Set environment variables for production
 ENV COMPOSER_ALLOW_SUPERUSER=1 \
     APP_ENV=production \
     PHP_OPCACHE_VALIDATE_TIMESTAMPS=0
 
-# Install runtime dependencies
 RUN apk add --no-cache \
     git curl zip unzip tzdata bash shadow \
     icu-libs icu-data-full \
     libzip freetype libpng libjpeg-turbo libxml2
 
-# Install build dependencies, will be removed later
 RUN apk add --no-cache --virtual .build-deps \
     $PHPIZE_DEPS icu-dev libzip-dev \
     freetype-dev libpng-dev libjpeg-turbo-dev libxml2-dev \
     libxml2-utils
 
-# Configure and install essential PHP extensions for Laravel 12 & Filament
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
  && docker-php-ext-install -j"$(nproc)" \
     bcmath exif intl gd pdo_mysql zip opcache xml dom pcntl
 
-# Optimized OPcache settings for production with JIT enabled
 RUN { \
       echo 'opcache.enable=1'; \
       echo 'opcache.enable_cli=1'; \
@@ -37,17 +30,14 @@ RUN { \
       echo 'opcache.jit=1235'; \
    } > /usr/local/etc/php/conf.d/opcache.ini
 
-# Clean up build dependencies to keep the image slim
 RUN apk del .build-deps
 
-# Set user and group IDs
 ARG PUID=1000
 ARG PGID=1000
 RUN usermod -u "${PUID}" www-data && groupmod -g "${PGID}" www-data
 
 WORKDIR /var/www/html
 
-# Add Composer binary from its official image
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # =========================
@@ -56,11 +46,9 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 FROM php_base AS deps
 WORKDIR /app
 
-# Copy only necessary files and install Composer dependencies
 COPY composer.json composer.lock* ./
-# RUN composer install --no-dev --prefer-dist --no-progress --no-interaction --no-scripts \
-#  && composer dump-autoload --classmap-authoritative --no-interaction
-RUN composer install --no-dev --prefer-dist --no-scripts -vvv
+RUN composer install --no-dev --prefer-dist --no-scripts --no-autoloader \
+ && composer dump-autoload --classmap-authoritative --no-dev
 
 # =========================
 # 3) Frontend assets build
@@ -84,23 +72,30 @@ RUN npm run build
 FROM php_base AS production
 WORKDIR /var/www/html
 
-# Copy application code, vendor, and built assets with correct ownership
+# Copy application code dengan ownership yang benar
 COPY --chown=www-data:www-data . .
 COPY --chown=www-data:www-data --from=deps /app/vendor ./vendor
 COPY --chown=www-data:www-data --from=assets /app/public/build ./public/build
-COPY --chown=www-data:www-data docker/template/ /var/www/html/storage/app/template/
-# Set correct permissions and run optimizations
-RUN mkdir -p storage/framework/{cache,sessions,views} bootstrap/cache \
- && chown -R www-data:www-data storage bootstrap \
- && chmod -R 775 storage bootstrap/cache \
- && php artisan storage:link
 
-# Expose PHP-FPM port
+# Copy template jika ada
+COPY --chown=www-data:www-data docker/template/ /var/www/html/storage/app/template/
+
+# Setup storage directories dan permissions
+RUN mkdir -p storage/framework/{cache,sessions,views} \
+             storage/logs \
+             storage/app/public \
+             bootstrap/cache \
+ && chown -R www-data:www-data storage bootstrap/cache \
+ && chmod -R 775 storage bootstrap/cache
+
+# Run storage link and cache optimization
+RUN php artisan storage:link || true \
+ && php artisan config:cache || true \
+ && php artisan route:cache || true \
+ && php artisan view:cache || true
+
 EXPOSE 9000
 
-# Set user to non-root
 USER www-data
 
-# Start PHP-FPM
 CMD ["php-fpm"]
-
