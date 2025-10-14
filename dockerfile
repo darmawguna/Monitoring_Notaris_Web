@@ -1,4 +1,6 @@
-
+# =========================
+# 1) Base PHP (Alpine) + extensions
+# =========================
 FROM php:8.2-fpm-alpine AS php_base
 
 ENV COMPOSER_ALLOW_SUPERUSER=1 \
@@ -12,8 +14,7 @@ RUN apk add --no-cache \
 
 RUN apk add --no-cache --virtual .build-deps \
     $PHPIZE_DEPS icu-dev libzip-dev \
-    freetype-dev libpng-dev libjpeg-turbo-dev libxml2-dev \
-    libxml2-utils
+    freetype-dev libpng-dev libjpeg-turbo-dev libxml2-dev
 
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
  && docker-php-ext-install -j"$(nproc)" \
@@ -21,15 +22,13 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
 
 RUN { \
       echo 'opcache.enable=1'; \
-      echo 'opcache.enable_cli=1'; \
       echo 'opcache.memory_consumption=256'; \
       echo 'opcache.interned_strings_buffer=32'; \
       echo 'opcache.max_accelerated_files=20000'; \
       echo 'opcache.validate_timestamps=${PHP_OPCACHE_VALIDATE_TIMESTAMPS}'; \
       echo 'opcache.jit_buffer_size=100M'; \
       echo 'opcache.jit=1235'; \
-   } > /usr/local/etc/php/conf.d/opcache.ini
-
+    } > /usr/local/etc/php/conf.d/opcache.ini
 RUN apk del .build-deps
 
 ARG PUID=1000
@@ -37,7 +36,6 @@ ARG PGID=1000
 RUN usermod -u "${PUID}" www-data && groupmod -g "${PGID}" www-data
 
 WORKDIR /var/www/html
-
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # =========================
@@ -46,9 +44,10 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 FROM php_base AS deps
 WORKDIR /app
 
-COPY composer.json composer.lock* ./
-RUN composer install --no-dev --prefer-dist --no-scripts --no-autoloader \
- && composer dump-autoload --classmap-authoritative --no-dev
+COPY composer.json composer.lock ./
+# --- PERBAIKAN DI SINI ---
+# Jalankan install dengan --no-scripts untuk mencegah error 'artisan not found'
+RUN composer install --no-dev --no-interaction --no-autoloader --no-scripts
 
 # =========================
 # 3) Frontend assets build
@@ -56,12 +55,8 @@ RUN composer install --no-dev --prefer-dist --no-scripts --no-autoloader \
 FROM node:20-bookworm AS assets
 WORKDIR /app
 
-RUN npm config set fund false && npm config set audit false
-
-COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
-RUN if [ -f pnpm-lock.yaml ]; then corepack enable && corepack prepare pnpm@latest --activate && pnpm i --frozen-lockfile; \
-    elif [ -f yarn.lock ]; then corepack enable && yarn install --frozen-lockfile; \
-    else npm ci --no-audit; fi
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit
 
 COPY . .
 RUN npm run build
@@ -72,30 +67,22 @@ RUN npm run build
 FROM php_base AS production
 WORKDIR /var/www/html
 
-# Copy application code dengan ownership yang benar
+# Salin semua artefak yang sudah dibangun
 COPY --chown=www-data:www-data . .
 COPY --chown=www-data:www-data --from=deps /app/vendor ./vendor
 COPY --chown=www-data:www-data --from=assets /app/public/build ./public/build
-
-# Copy template jika ada
 COPY --chown=www-data:www-data docker/template/ /var/www/html/storage/app/template/
 
-# Setup storage directories dan permissions
-RUN mkdir -p storage/framework/{cache,sessions,views} \
-             storage/logs \
-             storage/app/public \
-             bootstrap/cache \
- && chown -R www-data:www-data storage bootstrap/cache \
- && chmod -R 775 storage bootstrap/cache
+# --- PERBAIKAN DI SINI ---
+# Jalankan semua optimasi SEKARANG, setelah semua file ada di tempatnya
+RUN composer dump-autoload --optimize --classmap-authoritative \
+ && php artisan storage:link \
+ && php artisan optimize \
+ && php artisan filament:cache-components
 
-# Run storage link and cache optimization
-RUN php artisan storage:link || true \
- && php artisan config:cache || true \
- && php artisan route:cache || true \
- && php artisan view:cache || true
+# Atur permissions
+RUN chown -R www-data:www-data storage bootstrap/cache
 
 EXPOSE 9000
-
 USER www-data
-
 CMD ["php-fpm"]
