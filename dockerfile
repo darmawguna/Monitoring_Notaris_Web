@@ -15,10 +15,14 @@ WORKDIR /var/www/html
 COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-interaction --optimize-autoloader --no-scripts
 
-# Salin seluruh aplikasi (yang sekarang sudah termasuk /public/build)
+# Salin seluruh aplikasi (yang sekarang sudah termasuk /public/build dari git)
 COPY . .
 
-# Jalankan optimasi Laravel
+# Buat file .env sementara dan generate APP_KEY agar Artisan bisa berjalan
+RUN cp .env.example .env
+RUN php artisan key:generate
+
+# Jalankan semua perintah optimasi
 RUN php artisan optimize
 RUN php artisan view:cache
 RUN php artisan filament:assets
@@ -27,9 +31,10 @@ RUN php artisan filament:cache-components
 # =========================
 # 2) Production Image (Final)
 # =========================
-FROM php:8.2-fpm-alpine
+# --- PERBAIKAN DI SINI: Beri nama 'AS production' pada tahap ini ---
+FROM php:8.2-fpm-alpine AS production
 
-# Instal hanya dependensi runtime
+# Instal hanya dependensi runtime yang dibutuhkan
 RUN apk add --no-cache supervisor libzip libpng libjpeg-turbo freetype icu-libs
 
 WORKDIR /var/www/html
@@ -45,4 +50,3 @@ RUN chown -R www-data:www-data storage bootstrap/cache
 
 EXPOSE 9000
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
-
