@@ -55,8 +55,9 @@ RUN composer install --no-dev --no-interaction --no-autoloader --no-scripts
 FROM node:20-bookworm AS assets
 WORKDIR /app
 
+# Gunakan --no-optional untuk menghindari bug instalasi biner Rollup
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit
+RUN npm ci --no-audit --no-optional
 
 COPY . .
 RUN npm run build
@@ -77,7 +78,9 @@ COPY --chown=www-data:www-data docker/template/ /var/www/html/storage/app/templa
 # Jalankan semua optimasi SEKARANG, setelah semua file ada di tempatnya
 RUN composer dump-autoload --optimize --classmap-authoritative \
  && php artisan storage:link \
+ && php artisan filament:assets \
  && php artisan optimize \
+ && php artisan view:cache \
  && php artisan filament:cache-components
 
 # Atur permissions
