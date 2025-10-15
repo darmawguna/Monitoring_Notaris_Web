@@ -68,6 +68,7 @@ jobs:
 
             echo "🧹 Clearing and optimizing caches..."
             docker compose exec -T app php artisan optimize:clear
+            docker compose exec -T app php artisan filament:assets
             docker compose exec -T app php artisan config:cache
             docker compose exec -T app php artisan route:cache
             docker compose exec -T app php artisan view:cache
