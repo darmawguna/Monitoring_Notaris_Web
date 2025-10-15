@@ -4,7 +4,7 @@
 FROM php:8.2-fpm-alpine AS builder
 
 # Instal dependensi OS, PHP, dan Composer
-RUN apk add --no-cache libzip-dev zip unzip git curl icu-dev libpng-dev libjpeg-turbo-dev freetype-dev
+RUN apk add --no-cache libzip-dev zip unzip git curl icu-dev libpng-dev libjpeg-turbo-dev freetype-dev  mysql-client
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg
 RUN docker-php-ext-install -j"$(nproc)" pdo_mysql zip gd intl bcmath opcache
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
