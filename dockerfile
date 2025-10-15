@@ -23,7 +23,7 @@ COPY . .
 # =========================
 # 2) Production Image (Final)
 # =========================
-FROM php:8.2-fpm-alpine
+FROM php:8.2-fpm-alpine AS production
 
 # Instal hanya dependensi runtime
 RUN apk add --no-cache supervisor libzip libpng libjpeg-turbo freetype icu-libs
