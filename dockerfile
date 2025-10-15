@@ -1,91 +1,48 @@
 # =========================
-# 1) Base PHP (Alpine) + extensions
+# 1) Builder Stage (PHP + App Code)
 # =========================
-FROM php:8.2-fpm-alpine AS php_base
+FROM php:8.2-fpm-alpine AS builder
 
-ENV COMPOSER_ALLOW_SUPERUSER=1 \
-    APP_ENV=production \
-    PHP_OPCACHE_VALIDATE_TIMESTAMPS=0
-
-RUN apk add --no-cache \
-    git curl zip unzip tzdata bash shadow \
-    icu-libs icu-data-full \
-    libzip freetype libpng libjpeg-turbo libxml2
-
-RUN apk add --no-cache --virtual .build-deps \
-    $PHPIZE_DEPS icu-dev libzip-dev \
-    freetype-dev libpng-dev libjpeg-turbo-dev libxml2-dev
-
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
- && docker-php-ext-install -j"$(nproc)" \
-    bcmath exif intl gd pdo_mysql zip opcache xml dom pcntl
-
-RUN { \
-      echo 'opcache.enable=1'; \
-      echo 'opcache.memory_consumption=256'; \
-      echo 'opcache.interned_strings_buffer=32'; \
-      echo 'opcache.max_accelerated_files=20000'; \
-      echo 'opcache.validate_timestamps=${PHP_OPCACHE_VALIDATE_TIMESTAMPS}'; \
-      echo 'opcache.jit_buffer_size=100M'; \
-      echo 'opcache.jit=1235'; \
-    } > /usr/local/etc/php/conf.d/opcache.ini
-RUN apk del .build-deps
-
-ARG PUID=1000
-ARG PGID=1000
-RUN usermod -u "${PUID}" www-data && groupmod -g "${PGID}" www-data
-
-WORKDIR /var/www/html
+# Instal dependensi OS, PHP, dan Composer
+RUN apk add --no-cache libzip-dev zip unzip git curl icu-dev libpng-dev libjpeg-turbo-dev freetype-dev
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg
+RUN docker-php-ext-install -j"$(nproc)" pdo_mysql zip gd intl bcmath opcache
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# =========================
-# 2) Composer dependencies
-# =========================
-FROM php_base AS deps
-WORKDIR /app
-
-COPY composer.json composer.lock ./
-# --- PERBAIKAN DI SINI ---
-# Jalankan install dengan --no-scripts untuk mencegah error 'artisan not found'
-RUN composer install --no-dev --no-interaction --no-autoloader --no-scripts
-
-# =========================
-# 3) Frontend assets build
-# =========================
-FROM node:20-bookworm AS assets
-WORKDIR /app
-
-# Gunakan --no-optional untuk menghindari bug instalasi biner Rollup
-COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-optional
-
-COPY . .
-RUN npm run build
-
-# =========================
-# 4) Production image (final)
-# =========================
-FROM php_base AS production
 WORKDIR /var/www/html
 
-# Salin semua artefak yang sudah dibangun
-COPY --chown=www-data:www-data . .
-COPY --chown=www-data:www-data --from=deps /app/vendor ./vendor
-COPY --chown=www-data:www-data --from=assets /app/public/build ./public/build
-COPY --chown=www-data:www-data docker/template/ /var/www/html/storage/app/template/
+# Instal dependensi Composer
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-interaction --optimize-autoloader --no-scripts
 
-# --- PERBAIKAN DI SINI ---
-# Jalankan semua optimasi SEKARANG, setelah semua file ada di tempatnya
-RUN composer dump-autoload --optimize --classmap-authoritative \
- && php artisan storage:link \
- && php artisan filament:assets \
- && php artisan optimize \
- && php artisan view:cache \
- && php artisan filament:cache-components
+# Salin seluruh aplikasi (yang sekarang sudah termasuk /public/build)
+COPY . .
 
-# Atur permissions
+# Jalankan optimasi Laravel
+RUN php artisan optimize
+RUN php artisan view:cache
+RUN php artisan filament:assets
+RUN php artisan filament:cache-components
+
+# =========================
+# 2) Production Image (Final)
+# =========================
+FROM php:8.2-fpm-alpine
+
+# Instal hanya dependensi runtime
+RUN apk add --no-cache supervisor libzip libpng libjpeg-turbo freetype icu-libs
+
+WORKDIR /var/www/html
+
+# Salin aplikasi yang sudah teroptimasi dari tahap builder
+COPY --from=builder /var/www/html .
+
+# Salin konfigurasi Supervisor
+COPY docker/supervisor/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Atur kepemilikan file
 RUN chown -R www-data:www-data storage bootstrap/cache
 
 EXPOSE 9000
-USER www-data
-CMD ["php-fpm"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+

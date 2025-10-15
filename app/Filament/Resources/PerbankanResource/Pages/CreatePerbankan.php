@@ -16,6 +16,10 @@ use Illuminate\Database\Eloquent\Model;
 class CreatePerbankan extends CreateRecord
 {
     protected static string $resource = PerbankanResource::class;
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('create');
+    }
 
     protected function handleRecordCreation(array $data): Model
     {

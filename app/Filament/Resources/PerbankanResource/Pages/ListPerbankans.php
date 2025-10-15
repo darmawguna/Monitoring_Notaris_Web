@@ -15,12 +15,7 @@ class ListPerbankans extends ListRecords
         return [
             Actions\CreateAction::make()
                 ->visible(function (): bool {
-                    // Dapatkan pengguna yang sedang login
                     $user = auth()->user();
-                    // Kembalikan 'true' (tampilkan tombol) hanya jika peran pengguna
-                    // adalah 'Superadmin' atau 'FrontOffice'.
-                    // Catatan: Saya mengasumsikan 'petugasentry' adalah 'FrontOffice'.
-                    // Anda bisa mengubahnya jika nama perannya berbeda.
                     return in_array($user->role->name, ['Superadmin', 'Petugas Entry']);
                 }),
         ];
