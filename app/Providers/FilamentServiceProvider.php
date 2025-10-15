@@ -17,9 +17,9 @@ class FilamentServiceProvider extends ServiceProvider
         }
 
         // Ensure Filament assets use HTTPS
-        FilamentAsset::register([
-            Js::make('custom-select', resource_path('js/custom-select.js'))
-                ->loadedOnRequest(),
-        ]);
+        // FilamentAsset::register([
+        //     Js::make('custom-select', resource_path('js/custom-select.js'))
+        //         ->loadedOnRequest(),
+        // ]);
     }
 }
