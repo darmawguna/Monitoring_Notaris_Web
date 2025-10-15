@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Get short SHA from triggering workflow
+      - name: Get short SHA
         id: get_sha
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
@@ -31,65 +31,44 @@ jobs:
           port: 2607
           script: |
             set -e
-            
             PROJECT_DIR="/home/projectdarma/Monitoring_Notaris_Web"
-            
-            echo "📂 Navigating to project directory..."
             cd "$PROJECT_DIR"
 
-            echo "🔄 Pulling latest configuration from repository..."
+            echo "🔄 Pulling latest configuration..."
             git fetch origin
             git reset --hard origin/main
 
-            echo "🏷️  Setting image tag to: ${{ steps.get_sha.outputs.sha_short }}"
+            echo "🏷️ Setting image tag to: ${{ steps.get_sha.outputs.sha_short }}"
             echo "IMAGE_TAG=${{ steps.get_sha.outputs.sha_short }}" > .env.image
 
-            echo "📦 Pulling latest Docker image from Docker Hub..."
-            docker compose --env-file .env.image pull app queue schedule
+            echo "📦 Pulling latest Docker image..."
+            # --- PERBAIKAN DI SINI: Tambahkan --env-file .env ---
+            docker compose --env-file .env --env-file .env.image pull
 
-            echo "⏹️  Stopping current services gracefully..."
-            docker compose down --remove-orphans
+            echo "⏹️ Stopping current services..."
+            docker compose --env-file .env --env-file .env.image down --remove-orphans
 
             echo "🚀 Starting services with new image..."
-            docker compose --env-file .env.image up -d
+            docker compose --env-file .env --env-file .env.image up -d
 
             echo "⏳ Waiting for application to be healthy..."
-            timeout 120 bash -c 'until docker compose exec -T app php artisan --version > /dev/null 2>&1; do sleep 2; done' || {
-              echo "❌ Application failed to start properly"
-              docker compose logs --tail=50
-              exit 1
-            }
+            sleep 15
 
             echo "🔧 Running database migrations..."
-            docker compose exec -T app php artisan migrate --force
-
-            echo "🗃️  Seeding database (if needed)..."
-            docker compose exec -T app php artisan db:seed --force || true
+            # Gunakan 'run' untuk memastikan .env dimuat dengan benar untuk perintah satu kali
+            docker compose --env-file .env --env-file .env.image run --rm app php artisan migrate --force
 
             echo "🧹 Clearing and optimizing caches..."
-            docker compose exec -T app php artisan optimize:clear
-            docker compose exec -T app php artisan filament:assets
-            docker compose exec -T app php artisan config:cache
-            docker compose exec -T app php artisan route:cache
-            docker compose exec -T app php artisan view:cache
+            docker compose --env-file .env --env-file .env.image run --rm app php artisan optimize:clear
+            docker compose --env-file .env --env-file .env.image run --rm app php artisan filament:assets
+            docker compose --env-file .env --env-file .env.image run --rm app php artisan config:cache
+            docker compose --env-file .env --env-file .env.image run --rm app php artisan route:cache
+            docker compose --env-file .env --env-file .env.image run --rm app php artisan view:cache
 
             echo "🔗 Ensuring storage link..."
-            docker compose exec -T app php artisan storage:link || true
-
-            echo "📊 Checking service health..."
-            docker compose ps
+            docker compose --env-file .env --env-file .env.image run --rm app php artisan storage:link || true
             
             echo "🔁 Reloading Caddy web server..."
-            sudo systemctl reload caddy || echo "⚠️  Caddy reload skipped (not critical)"
+            sudo systemctl reload caddy
 
-            echo "✅ Deployment completed successfully!"
-            echo "🎉 Image tag deployed: ${{ steps.get_sha.outputs.sha_short }}"
-
-      - name: Deployment notification
-        if: always()
-        run: |
-          if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ Deployment successful"
-          else
-            echo "❌ Deployment failed"
-          fi
+            echo "✅ Deployment successful!"
