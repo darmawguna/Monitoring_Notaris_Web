@@ -97,7 +97,7 @@ class PerbankanResource extends Resource
         $user = auth()->user();
 
         // Superadmin & FrontOffice selalu bisa melihat detail apapun.
-        if (in_array($user->role->name, ['Superadmin', 'FrontOffice'])) {
+        if (in_array($user->role->name, ['Superadmin', 'Petugas Entry'])) {
             return true;
         }
 

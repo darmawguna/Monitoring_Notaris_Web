@@ -4,7 +4,6 @@ namespace App\Filament\Resources;
 
 use App\Enums\PembayaranStatus;
 use App\Filament\Resources\KwitansiResource\Pages;
-use App\Models\Berkas;
 use App\Models\Receipt;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section;
@@ -14,14 +13,22 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
+use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Support\RawJs;
+use Filament\Tables;
 use Filament\Tables\Actions\Action;
+use Filament\Tables\Actions\BulkAction;
+use Filament\Tables\Actions\BulkActionGroup;
+use Filament\Tables\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
+use Illuminate\Database\Eloquent\Collection;
 
 class KwitansiResource extends Resource
 {
@@ -31,19 +38,13 @@ class KwitansiResource extends Resource
     protected static ?string $pluralModelLabel = 'Audit Kwitansi';
     protected static ?string $navigationLabel = 'Kwitansi';
     protected static ?string $navigationGroup = 'Keuangan';
+
     public static function canViewAny(): bool
     {
         $user = auth()->user();
         $userRole = $user->role->name;
-
-        // 1. Superadmin dan Front Office selalu bisa melihat.
-        if (in_array($userRole, ['Superadmin', 'Petugas Entry'])) {
-            return true;
-        }
-
-        return false;
+        return in_array($userRole, ['Superadmin', 'Petugas Entry']);
     }
-    // ... (properti lain tetap sama)
 
     public static function form(Form $form): Form
     {
@@ -54,20 +55,24 @@ class KwitansiResource extends Resource
                         TextInput::make('receipt_number')
                             ->label('Nomor Kwitansi')
                             ->placeholder('Akan digenerate otomatis')
-                            ->readOnly(),
+                            ->readOnly()
+                            ->columnSpan(1),
+                        Select::make('status_pembayaran')
+                            ->label('Status Pembayaran')
+                            ->options(PembayaranStatus::class)
+                            ->required()
+                            ->default(PembayaranStatus::BELUM_LUNAS)
+                            ->columnSpan(1),
                         TextInput::make('nama_pemohon_kwitansi')
                             ->label('Nama Pemohon')
-                            ->required(),
-                        // Opsi untuk menautkan ke berkas yang sudah ada
+                            ->required()
+                            ->columnSpanFull(),
                         Select::make('berkas_id')
                             ->label('Tautkan ke Berkas (Opsional)')
                             ->relationship('berkas', 'nomor_berkas')
                             ->searchable()
-                            ->preload(),
-                        Textarea::make('notes_kwitansi')
-                            ->label('Catatan Kwitansi')
-                            ->columnSpanFull()
-                            ->helperText("tambahkan catatan terkait kwitansi seperti : lunas/blm lunas"),
+                            ->preload()
+                            ->columnSpanFull(),
                         Textarea::make('informasi_kwitansi')
                             ->label('Informasi peruntukan Kwitansi')
                             ->columnSpanFull(),
@@ -92,24 +97,54 @@ class KwitansiResource extends Resource
                             ->reactive()
                             ->afterStateUpdated(function (Get $get, Set $set) {
                                 $details = $get('detail_biaya');
-
                                 $total = collect($details)
                                     ->map(fn($item) => (int) preg_replace('/[^0-9]/', '', $item['jumlah'] ?? '0'))
                                     ->sum();
-
-                                // SET DALAM FORMAT TAMPILAN (dengan pemisah ribuan)
                                 $set('amount', number_format($total, 0, ',', '.'));
                             }),
-
                         TextInput::make('amount')
                             ->label('Total Rincian Biaya')
                             ->prefix('Rp')
                             ->readOnly()
-                            // Saat menyimpan, ubah kembali ke angka murni
                             ->dehydrateStateUsing(fn($state) => (int) preg_replace('/\D/', '', (string) $state))
-                            // Saat initial fill (edit), tampilkan terformat
                             ->formatStateUsing(fn($state) => number_format((int) ($state ?? 0), 0, ',', '.'))
                             ->helperText('Nilai ini dihitung otomatis oleh sistem berdasarkan rincian di atas.'),
+                    ]),
+            ]);
+    }
+
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist
+            ->schema([
+                InfolistSection::make('Informasi Kwitansi')
+                    ->schema([
+                        TextEntry::make('receipt_number')->label('Nomor Kwitansi'),
+                        TextEntry::make('nama_pemohon_kwitansi')->label('Nama Pemohon'),
+                        TextEntry::make('berkas.nomor_berkas')->label('Terkait Berkas'),
+                        TextEntry::make('status_pembayaran')
+                            ->badge()
+                            ->color(fn(PembayaranStatus $state): string => match ($state) {
+                                PembayaranStatus::LUNAS => 'success',
+                                PembayaranStatus::BELUM_LUNAS => 'danger',
+                            }),
+                        TextEntry::make('informasi_kwitansi')->label('Informasi Peruntukan')->columnSpanFull(),
+                    ])->columns(2),
+                InfolistSection::make('Rincian Biaya')
+                    ->schema([
+                        RepeatableEntry::make('detail_biaya')
+                            ->label('Item Rincian Biaya')
+                            ->schema([
+                                TextEntry::make('deskripsi'),
+                                TextEntry::make('jumlah')->money('IDR'),
+                            ])
+                            ->columns(2),
+                        TextEntry::make('amount')
+                            ->label('Total Rincian Biaya')
+                            ->money('IDR')
+                            ->size(TextEntry\TextEntrySize::Large)
+                            ->weight('bold')
+                            ->alignEnd(),
                     ]),
             ]);
     }
@@ -121,19 +156,63 @@ class KwitansiResource extends Resource
                 TextColumn::make('receipt_number')->label('Nomor Kwitansi')->searchable(),
                 TextColumn::make('nama_pemohon_kwitansi')->label('Nama Pemohon')->searchable(),
                 TextColumn::make('amount')->label('Jumlah')->money('IDR'),
-                BadgeColumn::make('status_pembayaran')->label('Status Pembayaran')
-                    ->colors([
-                        'success' => PembayaranStatus::LUNAS->value,
-                        'danger' => PembayaranStatus::BELUM_LUNAS->value,
-                    ]),
+                BadgeColumn::make('status_pembayaran')
+                    ->label('Status Pembayaran')
+                    ->color(fn(PembayaranStatus $state): string => match ($state) {
+                        PembayaranStatus::LUNAS => 'success',
+                        PembayaranStatus::BELUM_LUNAS => 'danger',
+                    }),
+            ])
+            ->filters([
+                SelectFilter::make('status_pembayaran')
+                    ->label('Status Pembayaran')
+                    ->options(PembayaranStatus::class)
             ])
             ->actions([
-                // (Kita akan menambahkan kembali aksi Edit/Lengkapi nanti jika diperlukan)
+                Tables\Actions\ViewAction::make(),
+                Tables\Actions\EditAction::make()
+                    ->visible(fn(Receipt $record): bool => $record->status_pembayaran !== PembayaranStatus::LUNAS),
+                Action::make('ubahStatus')
+                    ->label('Ubah Status')
+                    ->icon('heroicon-o-pencil-square')
+                    ->color('primary')
+                    ->fillForm(fn(Receipt $record) => ['status_pembayaran' => $record->status_pembayaran])
+                    ->form([
+                        Select::make('status_pembayaran')->label('Status Pembayaran')->options(PembayaranStatus::class)->required(),
+                    ])
+                    ->action(function (Receipt $record, array $data): void {
+                        $record->update(['status_pembayaran' => $data['status_pembayaran']]);
+                    })
+                    ->visible(fn(Receipt $record): bool => $record->status_pembayaran !== PembayaranStatus::LUNAS),
                 Action::make('download')
                     ->label('Download Kwitansi')
                     ->icon('heroicon-o-arrow-down-tray')
                     ->color('success')
                     ->url(fn(Receipt $record) => route('kwitansi.download', $record), shouldOpenInNewTab: true),
+            ])
+            ->bulkActions([
+                BulkActionGroup::make([
+                    BulkAction::make('tandai_lunas')
+                        ->label('Tandai Lunas')
+                        ->icon('heroicon-o-check-circle')
+                        ->color('success')
+                        ->action(function (Collection $records): void {
+                            $records->where('status_pembayaran', '!=', PembayaranStatus::LUNAS)
+                                ->each->update(['status_pembayaran' => PembayaranStatus::LUNAS]);
+                        })
+                        ->deselectRecordsAfterCompletion(),
+                    BulkAction::make('tandai_belum_lunas')
+                        ->label('Tandai Belum Lunas')
+                        ->icon('heroicon-o-x-circle')
+                        ->color('danger')
+                        ->action(function (Collection $records): void {
+                            $records->where('status_pembayaran', '!=', PembayaranStatus::LUNAS)
+                                ->each->update(['status_pembayaran' => PembayaranStatus::BELUM_LUNAS]);
+                        })
+                        ->deselectRecordsAfterCompletion(),
+                    DeleteBulkAction::make()
+                        ->visible(fn(): bool => auth()->user()->role->name === 'Superadmin'),
+                ]),
             ]);
     }
 
@@ -143,6 +222,8 @@ class KwitansiResource extends Resource
             'index' => Pages\ListKwitansis::route('/'),
             'create' => Pages\CreateKwitansi::route('/create'),
             'edit' => Pages\EditKwitansi::route('/{record}/edit'),
+            'view' => Pages\ViewKwitansi::route('/{record}'), // <-- Daftarkan halaman view
         ];
     }
 }
+
