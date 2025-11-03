@@ -60,7 +60,7 @@ class AdminPanelProvider extends PanelProvider
                 \App\Filament\Widgets\BerkasSelesaiWidget::class,
             ])
             ->renderHook('panels::topbar.start', fn() => view('filament.partials.navbar-title'))
-            ->renderHook('panels::body.start', fn() => view('filament.partials.sidebar-styles'))
+            // ->viteTheme('resources/css/filament/admin/theme.css')
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,

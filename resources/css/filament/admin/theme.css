@@ -1,0 +1,86 @@
+/* 
+ * File Lokasi: resources/css/filament/admin/theme.css
+ * Tema Kustom untuk NotarisFlow — Primary: Oranye, Secondary: Biru
+ */
+
+/* 1. Impor tema default Filament. INI WAJIB. */
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+/* 2. Definisikan variabel warna kustom */
+body.fi-theme-light {
+    /* === WARNA UTAMA: ORANGE (Amber) === */
+    --fi-color-primary-50: #fffbeb;
+    --fi-color-primary-100: #fef3c7;
+    --fi-color-primary-200: #fde68a;
+    --fi-color-primary-300: #fcd34d;
+    --fi-color-primary-400: #fbbf24;
+    --fi-color-primary-500: #f59e0b;
+    /* Warna utama tombol, badge, dll */
+    --fi-color-primary-600: #d97706;
+    --fi-color-primary-700: #b45309;
+    --fi-color-primary-800: #92400e;
+    --fi-color-primary-900: #78350f;
+
+    /* === WARNA SEKUNDER: BIRU (Sky) === */
+    --fi-color-secondary-50: #f0f9ff;
+    --fi-color-secondary-100: #e0f2fe;
+    --fi-color-secondary-200: #bae6fd;
+    --fi-color-secondary-300: #7dd3fc;
+    --fi-color-secondary-400: #38bdf8;
+    --fi-color-secondary-500: #0ea5e9;
+    /* Biru sekunder untuk aksen */
+    --fi-color-secondary-600: #0284c7;
+    --fi-color-secondary-700: #0369a1;
+    --fi-color-secondary-800: #075985;
+    --fi-color-secondary-900: #0c4a6e;
+
+    /* === SIDEBAR: Latar Biru Lembut, Aksen Oranye === */
+    --fi-sidebar-bg-color: #f0f9ff;
+    /* Sky-50 (biru sangat muda) */
+    --fi-sidebar-border-color: #bae6fd;
+    /* Sky-200 */
+
+    /* Teks & ikon default */
+    --fi-sidebar-item-label-text-color: #0c4a6e;
+    /* Sky-900 */
+    --fi-sidebar-item-icon-color: #0ea5e9;
+    /* Sky-500 */
+
+    /* Hover: oranye lembut */
+    --fi-sidebar-item-hover-bg: #fffbeb;
+    /* Amber-50 */
+    --fi-sidebar-item-hover-label-text-color: #b45309;
+    /* Amber-700 */
+    --fi-sidebar-item-hover-icon-color: #d97706;
+    /* Amber-600 */
+
+    /* Aktif: oranye lebih kuat */
+    --fi-sidebar-item-active-bg: #fef3c7;
+    /* Amber-100 */
+    --fi-sidebar-item-active-label-text-color: #92400e;
+    /* Amber-800 */
+    --fi-sidebar-item-active-icon-color: #b45309;
+    /* Amber-700 */
+
+    /* === BODY UTAMA === */
+    --fi-body-bg: #ffffff;
+
+    /* === TABEL === */
+    --fi-table-header-bg: #f0f9ff;
+    /* Sky-50 */
+    --fi-table-row-hover-bg: #fffbeb;
+    /* Amber-50 */
+
+    /* === TOMBOL UTAMA (Primary Button) === */
+    --fi-btn-color-primary: var(--fi-color-primary-500);
+    --fi-btn-color-primary-hover: var(--fi-color-primary-600);
+    --fi-btn-color-primary-active: var(--fi-color-primary-700);
+
+    /* === BADGE / STATUS === */
+    --fi-badge-color-primary-bg: var(--fi-color-primary-100);
+    --fi-badge-color-primary-text: var(--fi-color-primary-800);
+
+    /* === LINK === */
+    --fi-link-color: var(--fi-color-primary-600);
+    --fi-link-hover-color: var(--fi-color-primary-800);
+}
