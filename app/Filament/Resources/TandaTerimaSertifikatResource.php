@@ -129,16 +129,6 @@ class TandaTerimaSertifikatResource extends Resource
                     ])->columns(2),
                 InfolistSection::make('Dokumen Akhir')
                     ->schema([
-                        ImageEntry::make('dokumen_akhir_path')
-                            ->label('Pratinjau')
-                            ->disk('public')
-                            ->height(150)
-                            ->visible(function ($record): bool {
-                                $path = $record->dokumen_akhir_path;
-                                if (!$path)
-                                    return false;
-                                return Str::is(['*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp'], strtolower($path));
-                            }),
                         \Filament\Infolists\Components\Actions::make([
                             InfolistAction::make('download_file')
                                 ->label('Download Lampiran')

@@ -22,6 +22,7 @@ use Filament\Tables\Table;
 use Illuminate\Support\Carbon;
 use Filament\Forms\Get;
 use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\Actions\Action as InfolistAction;
 use Filament\Forms\Components\Repeater;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
@@ -71,45 +72,73 @@ class PerbankanResource extends Resource
     {
         $user = auth()->user();
         $query = parent::getEloquentQuery();
+        $userRole = $user->role->name;
 
-        // Jika pengguna BUKAN Superadmin atau FrontOffice, filter daftar berkasnya.
-        if (!in_array($user->role->name, ['Superadmin'])) {
-            // Tampilkan hanya berkas Perbankan di mana pengguna ini memiliki tugas 'pending'
-            return $query->whereHas('progress', function (Builder $q) use ($user) {
-                $q->where('assignee_id', $user->id)->where('status', 'pending');
-            });
+        // 1. Cek Superadmin terlebih dahulu
+        if ($userRole === 'Superadmin') {
+            return $query; // Tampilkan semua
         }
-        if ($user->role->name === 'Petugas Entry') {
-            // Tampilkan berkas yang 'selesai' ATAU berkas yang dibuat oleh mereka
+
+        // 2. Cek Petugas Entry (FrontOffice)
+        if ($userRole === 'Petugas Entry') {
             return $query->where(function (Builder $query) use ($user) {
                 $query->where('status_overall', BerkasStatus::SELESAI)
                     ->orWhere('created_by', $user->id);
             });
         }
 
-        // Untuk admin, tampilkan semuanya.
-        return $query;
+        // 3. Jika bukan keduanya, berarti ini adalah Petugas lain
+        // Tampilkan hanya berkas Perbankan di mana pengguna ini memiliki tugas 'pending'
+        return $query->whereHas('progress', function (Builder $q) use ($user) {
+            $q->where('assignee_id', $user->id)->where('status', 'pending');
+        });
     }
 
-    // --- PERBAIKAN 2: Otorisasi Per Record ---
     public static function canView(Model $record): bool
     {
         $user = auth()->user();
+        $userRole = $user->role->name;
 
-        // Superadmin & FrontOffice selalu bisa melihat detail apapun.
-        if (in_array($user->role->name, ['Superadmin', 'Petugas Entry'])) {
+        // 1. Superadmin bisa melihat semuanya
+        if ($userRole === 'Superadmin') {
             return true;
         }
 
-        // Petugas hanya bisa melihat jika mereka memiliki tugas 'pending' di record ini.
+        // 2. Petugas Entry bisa melihat jika Selesai ATAU mereka yang buat
+        if ($userRole === 'Petugas Entry') {
+            return $record->status_overall === BerkasStatus::SELESAI || $record->created_by === $user->id;
+        }
+
+        // 3. Petugas lain hanya bisa melihat jika punya tugas pending
         return $record->progress()
             ->where('assignee_id', $user->id)
             ->where('status', 'pending')
             ->exists();
     }
 
+    public static function canEdit(Model $record): bool
+    {
+        $user = auth()->user();
+        $userRole = $user->role->name;
+
+        // Aturan 1: Superadmin dan Petugas Entry selalu bisa mengedit.
+        if (in_array($userRole, ['Superadmin', 'Petugas Entry'])) {
+            return true;
+        }
+
+        // Aturan 2: Petugas lain bisa mengedit HANYA
+        // jika mereka memiliki tugas 'pending' untuk berkas ini.
+        return $record->progress()
+            ->where('assignee_id', $user->id)
+            ->where('status', 'pending')
+            ->exists();
+    }
+
+
     public static function form(Form $form): Form
     {
+        $isReadOnlyForPetugas = fn(string $operation): bool =>
+            $operation === 'edit' && !in_array(auth()->user()->role->name, ['Superadmin', 'Petugas Entry']);
         return $form
             ->schema([
                 Section::make('Informasi Debitur')
@@ -130,14 +159,16 @@ class PerbankanResource extends Resource
                         TextInput::make('npwp')->label('NPWP'),
                         TextInput::make('email')->label('Email')->email(),
                         TextInput::make('telepon')->label('Telepon')->tel(),
-                    ])->columns(2),
+                    ])->columns(2)
+                    ->disabled($isReadOnlyForPetugas),
 
                 // --- SECTION BARU UNTUK KREDITUR ---
                 Section::make('Informasi Kreditur')
                     ->schema([
                         TextInput::make('nama_kreditur')->label('Nama Kreditur'),
                         TextInput::make('nomor_pk')->label('Nomor PK (Perjanjian Kredit)'),
-                    ])->columns(2),
+                    ])->columns(2)
+                    ->disabled($isReadOnlyForPetugas),
                 // --- AKHIR DARI SECTION BARU ---
 
                 Section::make('Informasi Covernote / SKMHT')
@@ -167,7 +198,8 @@ class PerbankanResource extends Resource
                                 0 => 'Lainnya (dalam bulan)',
                             ])
                             ->required()
-                            ->reactive(), // Buat dropdown ini reaktif
+                            ->reactive()
+                            ->disabled($isReadOnlyForPetugas),
 
                         // Input teks tambahan untuk "Lainnya"
                         TextInput::make('jangka_waktu_lainnya')
@@ -180,7 +212,8 @@ class PerbankanResource extends Resource
                         DatePicker::make('tanggal_covernote')
                             ->label('Tanggal Awal Covernote')
                             ->required()
-                            ->default(now()),
+                            ->default(now())
+                            ->disabled($isReadOnlyForPetugas),
                     ]),
                 Section::make('Penugasan Awal')
                     ->schema([
@@ -194,7 +227,8 @@ class PerbankanResource extends Resource
                             )
                             ->searchable()
                             ->preload()
-                            ->required(),
+                            ->required()
+                            ->disabled($isReadOnlyForPetugas),
                     ])
             ]);
     }
@@ -203,11 +237,6 @@ class PerbankanResource extends Resource
     {
         return $table
             // --- PERBAIKAN: Hapus getTableQuery(), modifikasi query di sini ---
-            ->query(
-                Perbankan::query()
-                    // Gunakan orderByRaw untuk mengurutkan berdasarkan hasil perhitungan
-                    ->orderByRaw('DATE_ADD(tanggal_covernote, INTERVAL jangka_waktu MONTH) asc')
-            )
             ->columns([
                 TextColumn::make('nama_debitur')
                     ->label('Nama Debitur')
@@ -313,21 +342,30 @@ class PerbankanResource extends Resource
                         TextEntry::make('tanggal_covernote')
                             ->label('Tanggal Awal Covernote')
                             ->date('d F Y'),
-                        ImageEntry::make('files.0.path') // Mengakses path dari file pertama di relasi
-                            ->label('Pratinjau Berkas')
-                            ->disk('public')
-                            ->height(150)
-                            ->visible(function ($record): bool {
-                                $file = $record->files->first(); // Dapatkan record file pertama
-                                if (!$file) {
-                                    return false;
-                                }
-                                return Str::is(['*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp'], strtolower($file->path));
-                            }),
                         // Komponen untuk tombol Aksi (dengan logika yang diperbaiki)
-                        ViewEntry::make('files')
-                            ->hiddenLabel() // Kita tidak perlu label di atasnya
-                            ->view('filament.infolists.components.perbankan-file-entry'),
+                        // ViewEntry::make('files')
+                        //     ->hiddenLabel() // Kita tidak perlu label di atasnya
+                        //     ->view('filament.infolists.components.perbankan-file-entry'),
+                    ]),
+                InfolistSection::make('Dokumen Perbankan')
+                    ->schema([
+                        \Filament\Infolists\Components\Actions::make([
+                            InfolistAction::make('download_file')
+                                ->label('Download Lampiran')
+                                ->icon('heroicon-o-paper-clip')
+                                ->color('gray')
+                                ->url(function (Perbankan $record): string {
+                                    // 1. Ambil file pertama dari relasi 'files'
+                                    $file = $record->files->first();
+                                    // 2. Jika tidak ada file, kembalikan URL yang aman
+                                    if (!$file) {
+                                        return '#';
+                                    }
+                                    return route('perbankan-files.download', ['perbankanFile' => $file]);
+                                }, shouldOpenInNewTab: true)
+                                // 4. Perbarui logika visibilitas
+                                ->visible(fn(Perbankan $record): bool => $record->files->isNotEmpty()),
+                        ])->hiddenLabel() // Sembunyikan label "Actions"
                     ]),
 
                 // Opsional: Riwayat & Durasi (jika masih relevan)

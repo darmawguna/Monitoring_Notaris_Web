@@ -78,24 +78,26 @@ class BerkasResource extends Resource
     {
         $user = auth()->user();
         $query = parent::getEloquentQuery();
-        // Jika pengguna BUKAN Superadmin atau FrontOffice, filter daftar berkasnya.
-        if (!in_array($user->role->name, ['Superadmin'])) {
-            // Tampilkan hanya berkas di mana pengguna ini memiliki tugas yang 'pending'
-            return $query->whereHas('progress', function (Builder $q) use ($user) {
-                $q->where('assignee_id', $user->id)->where('status', 'pending');
-            });
+        $userRole = $user->role->name;
+
+        // 1. Cek Superadmin terlebih dahulu
+        if ($userRole === 'Superadmin') {
+            return $query; // Tampilkan semua
         }
 
-        if ($user->role->name === 'Petugas Entry') {
-            // Tampilkan berkas yang 'selesai' ATAU berkas yang dibuat oleh mereka
+        // 2. Cek Petugas Entry (FrontOffice)
+        if ($userRole === 'Petugas Entry') {
             return $query->where(function (Builder $query) use ($user) {
                 $query->where('status_overall', BerkasStatus::SELESAI)
                     ->orWhere('created_by', $user->id);
             });
         }
 
-        // Untuk Superadmin dan FrontOffice, tampilkan semuanya dan muat relasi yang dibutuhkan.
-        return $query->with(['createdBy']);
+        // 3. Jika bukan keduanya, berarti ini adalah Petugas lain
+        // Tampilkan hanya berkas Perbankan di mana pengguna ini memiliki tugas 'pending'
+        return $query->whereHas('progress', function (Builder $q) use ($user) {
+            $q->where('assignee_id', $user->id)->where('status', 'pending');
+        });
     }
 
     // --- DITAMBAHKAN: OTORISASI PER RECORD ---
@@ -105,10 +107,15 @@ class BerkasResource extends Resource
     public static function canView(Model $record): bool
     {
         $user = auth()->user();
+        $userRole = $user->role->name;
 
         // Superadmin & FrontOffice selalu bisa melihat detail apapun.
-        if (in_array($user->role->name, ['Superadmin'])) {
+        if (in_array($userRole, ['Superadmin'])) {
             return true;
+        }
+
+        if ($userRole === 'Petugas Entry') {
+            return $record->status_overall === BerkasStatus::SELESAI || $record->created_by === $user->id;
         }
 
         // Petugas hanya bisa melihat jika mereka memiliki tugas 'pending' di berkas ini.
@@ -119,14 +126,29 @@ class BerkasResource extends Resource
             ->exists();
     }
 
-    // public static function canEdit(Model $record): bool
-    // {
-    //     return auth()->user()->role->name === 'Superadmin';
-    // }
+    public static function canEdit(Model $record): bool
+    {
+        $user = auth()->user();
+        $userRole = $user->role->name;
+
+        // Aturan 1: Superadmin dan Petugas Entry selalu bisa mengedit.
+        if (in_array($userRole, ['Superadmin', 'Petugas Entry'])) {
+            return true;
+        }
+
+        // Aturan 2: Petugas lain bisa mengedit HANYA
+        // jika mereka memiliki tugas 'pending' untuk berkas ini.
+        return $record->progress()
+            ->where('assignee_id', $user->id)
+            ->where('status', 'pending')
+            ->exists();
+    }
 
 
     public static function form(Form $form): Form
     {
+        $isReadOnlyForPetugas = fn(string $operation): bool =>
+            $operation === 'edit' && !in_array(auth()->user()->role->name, ['Superadmin', 'Petugas Entry']);
         return $form
             ->schema([
                 // SECTION BERKAS
@@ -152,9 +174,10 @@ class BerkasResource extends Resource
                         // ->afterStateUpdated(fn(Set $set, ?string $state) => $set('nama_pemohon', null)),
                         TextInput::make('nama_pemohon')
                             ->required()
-                            ->maxLength(255),
+                            ->maxLength(255)
 
-                    ])->columns(3),
+                    ])->columns(3)
+                    ->disabled($isReadOnlyForPetugas),
 
                 // SECTION BERKAS JUAL BELI
                 Section::make(function (Get $get): string {
@@ -183,7 +206,7 @@ class BerkasResource extends Resource
                                     TextInput::make('penjual_data.nik')->label('Identitas / NIK'),
                                     TextInput::make('penjual_data.telp')->label('No. Telp'),
                                     Textarea::make('penjual_data.alamat')->label('Alamat'),
-                                ]),
+                                ])->disabled($isReadOnlyForPetugas),
 
                             // PIHAK KEDUA (LABEL DINAMIS)
                             Section::make(function (Get $get): string {
@@ -200,7 +223,7 @@ class BerkasResource extends Resource
                                     TextInput::make('pembeli_data.nik')->label('Identitas / NIK'),
                                     TextInput::make('pembeli_data.telp')->label('No. Telp'),
                                     Textarea::make('pembeli_data.alamat')->label('Alamat'),
-                                ]),
+                                ])->disabled($isReadOnlyForPetugas),
 
                             Section::make('Data Pihak Persetujuan')
                                 ->schema([
@@ -208,7 +231,7 @@ class BerkasResource extends Resource
                                     TextInput::make('pihak_persetujuan_data.nik')->label('Identitas / NIK'),
                                     TextInput::make('pihak_persetujuan_data.telp')->label('No. Telp'),
                                     Textarea::make('pihak_persetujuan_data.alamat')->label('Alamat'),
-                                ]),
+                                ])->disabled($isReadOnlyForPetugas),
                         ])
                     ]),
 
@@ -240,7 +263,8 @@ class BerkasResource extends Resource
                             ->stripCharacters(',')
                             ->dehydrateStateUsing(fn($state): ?string => $state ? preg_replace('/[^0-9]/', '', $state) : null)
                             ->helperText('Masukkan total estimasi biaya awal.'),
-                    ])->columns(2),
+                    ])->columns(2)
+                    ->disabled($isReadOnlyForPetugas),
 
                 // SECTION PBB
                 Section::make('Informasi Akta')
@@ -248,7 +272,8 @@ class BerkasResource extends Resource
                         TextInput::make('pbb_validasi')->label('Validasi PBB'),
                         TextInput::make('pbb_akta_bpjb')->label('Akta PPJB'),
                         TextInput::make('pbb_nop')->label('NOP'),
-                    ])->columns(3),
+                    ])->columns(3)
+                    ->disabled($isReadOnlyForPetugas),
 
 
 
@@ -329,7 +354,9 @@ class BerkasResource extends Resource
                             ->preload()
                             ->required()
                         // 3. HAPUS ->mapped(false) karena sudah ditangani di CreateBerkas.php
-                    ]),
+                    ])
+                    // ->visibleOn('create')
+                    ->disabled($isReadOnlyForPetugas),
             ]);
     }
 

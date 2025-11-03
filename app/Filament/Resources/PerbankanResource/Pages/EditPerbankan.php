@@ -77,4 +77,9 @@ class EditPerbankan extends EditRecord
                 ->visible(fn(): bool => auth()->user()->role->name === 'Superadmin'),
         ];
     }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('view', ['record' => $this->getRecord()]);
+    }
 }

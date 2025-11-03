@@ -38,46 +38,75 @@ class TurunWarisResource extends Resource
     {
         $user = auth()->user();
         $query = parent::getEloquentQuery();
+        $userRole = $user->role->name;
 
-        // Jika pengguna BUKAN Superadmin atau FrontOffice, filter daftar berkasnya.
-        if (!in_array($user->role->name, ['Superadmin'])) {
-            // Tampilkan hanya berkas Perbankan di mana pengguna ini memiliki tugas 'pending'
-            return $query->whereHas('progress', function (Builder $q) use ($user) {
-                $q->where('assignee_id', $user->id)->where('status', 'pending');
-            });
+        // 1. Cek Superadmin terlebih dahulu
+        if ($userRole === 'Superadmin') {
+            return $query; // Tampilkan semua
         }
 
-        if ($user->role->name === 'Petugas Entry') {
-            // Tampilkan berkas yang 'selesai' ATAU berkas yang dibuat oleh mereka
+        // 2. Cek Petugas Entry (FrontOffice)
+        if ($userRole === 'Petugas Entry') {
             return $query->where(function (Builder $query) use ($user) {
                 $query->where('status_overall', BerkasStatus::SELESAI)
                     ->orWhere('created_by', $user->id);
             });
         }
 
-        // Untuk admin, tampilkan semuanya.
-        return $query;
+        // 3. Jika bukan keduanya, berarti ini adalah Petugas lain
+        // Tampilkan hanya berkas Perbankan di mana pengguna ini memiliki tugas 'pending'
+        return $query->whereHas('progress', function (Builder $q) use ($user) {
+            $q->where('assignee_id', $user->id)->where('status', 'pending');
+        });
     }
 
-    // --- PERBAIKAN 2: Otorisasi Per Record ---
+    // --- DITAMBAHKAN: OTORISASI PER RECORD ---
+    /**
+     * Tentukan apakah pengguna bisa melihat record detail.
+     */
     public static function canView(Model $record): bool
     {
         $user = auth()->user();
+        $userRole = $user->role->name;
 
         // Superadmin & FrontOffice selalu bisa melihat detail apapun.
-        if (in_array($user->role->name, ['Superadmin'])) {
+        if (in_array($userRole, ['Superadmin'])) {
             return true;
         }
 
-        // Petugas hanya bisa melihat jika mereka memiliki tugas 'pending' di record ini.
+        if ($userRole === 'Petugas Entry') {
+            return $record->status_overall === BerkasStatus::SELESAI || $record->created_by === $user->id;
+        }
+
+        // Petugas hanya bisa melihat jika mereka memiliki tugas 'pending' di berkas ini.
+        // Ini adalah "penjaga pintu" yang memeriksa "tiket" dari TugasResource.
         return $record->progress()
             ->where('assignee_id', $user->id)
             ->where('status', 'pending')
             ->exists();
     }
 
+    public static function canEdit(Model $record): bool
+    {
+        $user = auth()->user();
+        $userRole = $user->role->name;
+
+        // Aturan 1: Superadmin dan Petugas Entry selalu bisa mengedit.
+        if (in_array($userRole, ['Superadmin', 'Petugas Entry'])) {
+            return true;
+        }
+
+        // Aturan 2: Petugas lain bisa mengedit HANYA
+        // jika mereka memiliki tugas 'pending' untuk berkas ini.
+        return $record->progress()
+            ->where('assignee_id', $user->id)
+            ->where('status', 'pending')
+            ->exists();
+    }
     public static function form(Form $form): Form
     {
+        $isReadOnlyForPetugas = fn(string $operation): bool =>
+            $operation === 'edit' && !in_array(auth()->user()->role->name, ['Superadmin', 'Petugas Entry']);
         return $form
             ->schema([
                 Section::make('Informasi Kasus')
@@ -86,7 +115,7 @@ class TurunWarisResource extends Resource
                             ->label('Nama Kasus / Klien')
                             ->required()
                             ->maxLength(255),
-                    ]),
+                    ])->disabled($isReadOnlyForPetugas),
                 Section::make('Upload Dokumen')
                     ->schema([
                         Repeater::make('files')
@@ -127,7 +156,8 @@ class TurunWarisResource extends Resource
                             )
                             ->searchable()
                             ->preload()
-                            ->required(),
+                            ->required()
+                            ->disabled($isReadOnlyForPetugas),
                     ]),
             ]);
     }

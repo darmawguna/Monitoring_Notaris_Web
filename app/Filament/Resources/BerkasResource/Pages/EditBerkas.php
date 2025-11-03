@@ -18,11 +18,6 @@ class EditBerkas extends EditRecord
             Actions\DeleteAction::make(),
         ];
     }
-    protected function canEdit(Model $record): bool
-    {
-        // Hanya izinkan edit jika peran pengguna adalah Superadmin.
-        return auth()->user()->role->name === 'Superadmin';
-    }
     protected function mutateFormDataBeforeFill(array $data): array
     {
         // 1. Dapatkan record Berkas yang sedang diedit
@@ -47,27 +42,36 @@ class EditBerkas extends EditRecord
      */
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        // 1. Ambil ID petugas yang baru dari form
-        $newAssigneeId = $data['petugas_pengetikan_id'];
+        $user = auth()->user();
+        $userRole = $user->role->name ?? null;
 
-        // 2. Hapus kunci ini dari data agar tidak mencoba disimpan ke tabel 'berkas'
-        unset($data['petugas_pengetikan_id']);
-
-        // 3. Cari catatan progres yang relevan
-        $pengetikanProgress = $record->progress()
-            ->where('stage_key', StageKey::PETUGAS_PENGETIKAN) // Ganti dengan StageKey yang benar
-            ->first();
-
-        // 4. Jika ada dan ID petugas berubah, perbarui
-        if ($pengetikanProgress && $pengetikanProgress->assignee_id != $newAssigneeId) {
-            $pengetikanProgress->update(['assignee_id' => $newAssigneeId]);
-            // Di sini Anda bisa menambahkan logika notifikasi jika penugasan berubah
+        // Hanya non-Superadmin & non-Petugas Entry yang tidak boleh mengubah data pihak
+        if (!in_array($userRole, ['Superadmin', 'Petugas Entry'])) {
+            $criticalJsonFields = ['penjual_data', 'pembeli_data', 'pihak_persetujuan_data'];
+            foreach ($criticalJsonFields as $field) {
+                $data[$field] = $record->getOriginal($field);
+            }
         }
 
-        // 5. Lanjutkan proses update untuk sisa data di tabel 'berkas'
+        // --- Tangani penugasan ---
+        $newAssigneeId = $data['petugas_pengetikan_id'] ?? null;
+        unset($data['petugas_pengetikan_id']);
+
+        $pengetikanProgress = $record->progress()
+            ->where('stage_key', StageKey::PETUGAS_PENGETIKAN)
+            ->first();
+
+        if ($pengetikanProgress && !is_null($newAssigneeId) && $pengetikanProgress->assignee_id != $newAssigneeId) {
+            $pengetikanProgress->update(['assignee_id' => $newAssigneeId]);
+        }
+
         $record->update($data);
 
         return $record;
     }
 
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
 }

@@ -42,4 +42,9 @@ class CreateTandaTerimaSertifikat extends CreateRecord
         $data['created_by'] = auth()->id();
         return $data;
     }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
 }
