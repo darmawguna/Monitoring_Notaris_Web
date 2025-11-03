@@ -129,9 +129,11 @@ class TurunWarisResource extends Resource
                             ->columns(2)
                             ->addActionLabel('Tambah Dokumen Lampiran')
                             ->mutateRelationshipDataBeforeFillUsing(function (array $data): array {
-                                $standardOptions = ['surat_kematian', 'surat_nikah', 'ktp_ahli_waris', 'kk_ahli_waris', 'sertifikat', 'pbb'];
+                                $standardOptions = ['ktp_suami', 'ktp_istri', 'kk', 'sertifikat', 'pbb'];
                                 if (!in_array($data['type'], $standardOptions)) {
+                                    // ...maka "suntikkan" nilai tersebut ke field 'type_lainnya'
                                     $data['type_lainnya'] = $data['type'];
+                                    // dan atur 'type' kembali ke 'lainnya' agar dropdown dan text input muncul
                                     $data['type'] = 'lainnya';
                                 }
                                 return $data;

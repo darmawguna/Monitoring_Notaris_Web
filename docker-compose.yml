@@ -36,8 +36,8 @@ services:
       - storage_data:/var/www/html/storage
       - ./public:/var/www/html/public
       # Mount PHP config (optional)
-      - ./docker/php/php-fpm.conf:/usr/local/etc/php-fpm.conf:ro
-      - ./docker/php/www.conf:/usr/local/etc/php-fpm.d/www.conf:ro
+      # - ./docker/php/php-fpm.conf:/usr/local/etc/php-fpm.conf:ro
+      # - ./docker/php/www.conf:/usr/local/etc/php-fpm.d/www.conf:ro
       - ./docker/php/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
     expose:
       - "9000"

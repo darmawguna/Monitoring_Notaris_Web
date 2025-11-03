@@ -73,6 +73,10 @@ class KwitansiResource extends Resource
                             ->searchable()
                             ->preload()
                             ->columnSpanFull(),
+                        TextInput::make('notes_kwitansi')
+                            ->label('Catatan Kwitansi')
+                            ->required()
+                            ->columnSpanFull(),
                         Textarea::make('informasi_kwitansi')
                             ->label('Informasi peruntukan Kwitansi')
                             ->columnSpanFull(),
@@ -122,6 +126,7 @@ class KwitansiResource extends Resource
                         TextEntry::make('receipt_number')->label('Nomor Kwitansi'),
                         TextEntry::make('nama_pemohon_kwitansi')->label('Nama Pemohon'),
                         TextEntry::make('berkas.nomor_berkas')->label('Terkait Berkas'),
+                        TextEntry::make('notes_kwitansi')->label('Catatan Kwitansi'),
                         TextEntry::make('status_pembayaran')
                             ->badge()
                             ->color(fn(PembayaranStatus $state): string => match ($state) {

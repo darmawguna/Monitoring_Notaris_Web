@@ -18,7 +18,7 @@ class Receipt extends Model
         'amount',
         'status_pembayaran',
         'detail_biaya',
-        'notes_kwitansi', // <-- Tambahkan ini
+        'notes_kwitansi',
         'payment_method',
         'issued_at',
         'informasi_kwitansi', // 'notes' lama bisa dihapus jika 'notes_kwitansi' adalah penggantinya

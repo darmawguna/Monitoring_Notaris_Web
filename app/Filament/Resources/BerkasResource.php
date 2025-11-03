@@ -274,12 +274,8 @@ class BerkasResource extends Resource
                         TextInput::make('pbb_nop')->label('NOP'),
                     ])->columns(3)
                     ->disabled($isReadOnlyForPetugas),
-
-
-
                 Section::make('Upload Dokumen')
                     ->schema([
-                        // --- INI BAGIAN YANG DIPERBARUI SECARA TOTAL ---
                         Repeater::make('files')
                             ->relationship()
                             ->label('Lampiran Berkas')
@@ -310,35 +306,24 @@ class BerkasResource extends Resource
                             ])
                             ->columns(2)
                             ->addActionLabel('Tambah Dokumen Lampiran')
-
-                            // 1. Tambahkan hook ini untuk memuat data edit dengan benar
                             ->mutateRelationshipDataBeforeFillUsing(function (array $data): array {
                                 $standardOptions = ['ktp_suami', 'ktp_istri', 'kk', 'sertifikat', 'pbb'];
-
-                                // Jika nilai 'type' yang ada di database BUKAN salah satu opsi standar...
                                 if (!in_array($data['type'], $standardOptions)) {
                                     // ...maka "suntikkan" nilai tersebut ke field 'type_lainnya'
                                     $data['type_lainnya'] = $data['type'];
                                     // dan atur 'type' kembali ke 'lainnya' agar dropdown dan text input muncul
                                     $data['type'] = 'lainnya';
                                 }
-
                                 return $data;
                             })
-
-                            // 2. Gunakan hook ini untuk menangani CREATE dan UPDATE
                             ->mutateRelationshipDataBeforeSaveUsing(function (array $data): array {
-                                // Jika pengguna memilih 'lainnya', gunakan input teks sebagai gantinya.
                                 if ($data['type'] === 'lainnya' && isset($data['type_lainnya'])) {
                                     $data['type'] = $data['type_lainnya'];
                                 }
-                                // Hapus data sementara yang tidak perlu disimpan
                                 unset($data['type_lainnya']);
                                 return $data;
                             }),
                     ]),
-
-
                 // Kolom penugasan (tetap ada di bawah agar alur kerja tidak berubah)
                 Section::make('Penugasan Awal')
                     ->schema([
