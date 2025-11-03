@@ -11,7 +11,7 @@ jobs:
   deploy:
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Get short SHA
         id: get_sha
@@ -50,39 +50,24 @@ jobs:
             echo "🚀 Starting services with new image..."
             docker compose --env-file .env --env-file .env.image up -d
 
-            echo "🩺 Applying PHP-FPM permission patch (if needed)..."
-            docker compose exec -T app sh -lc '
-              mkdir -p /usr/local/var/log &&
-              touch /usr/local/var/log/php-fpm.log &&
-              chmod 666 /usr/local/var/log/php-fpm.log || true
-            '
-
-            echo "🔧 Checking FPM configuration override..."
-            docker compose exec -T app sh -lc '
-              if grep -q "/usr/local/var/log/php-fpm.log" /usr/local/etc/php-fpm.conf 2>/dev/null; then
-                echo "→ Overriding FPM config to use /proc/self/fd/2"
-                sed -i "s|/usr/local/var/log/php-fpm.log|/proc/self/fd/2|g" /usr/local/etc/php-fpm.conf || true
-              fi
-            '
-
-            echo "🔁 Restarting app service to reload FPM..."
-            docker compose restart app
-            sleep 10
-
-            echo "🧹 Clearing caches first..."
-            docker compose --env-file .env --env-file .env.image run --rm app php artisan optimize:clear
+            echo "⏳ Waiting for application to be healthy..."
+            sleep 15 # Beri waktu agar kontainer app stabil
 
             echo "🔧 Running database migrations..."
-            docker compose --env-file .env --env-file .env.image run --rm app php artisan migrate --force
+            docker compose --env-file .env.image run --rm app php artisan migrate --force
 
-            echo "🧩 Rebuilding assets and caches..."
-            docker compose --env-file .env --env-file .env.image run --rm app php artisan filament:assets || true
-            docker compose --env-file .env --env-file .env.image run --rm app php artisan config:cache
-            docker compose --env-file .env --env-file .env.image run --rm app php artisan route:cache
-            docker compose --env-file .env --env-file .env.image run --rm app php artisan view:cache
+            echo "🗃️ Seeding database (if needed)..."
+            docker compose --env-file .env.image run --rm app php artisan db:seed --force || true
+
+            echo "🧹 Clearing and optimizing caches..."
+            docker compose --env-file .env.image run --rm app php artisan optimize:clear
+            docker compose --env-file .env.image run --rm app php artisan filament:assets || true
+            docker compose --env-file .env.image run --rm app php artisan config:cache
+            docker compose --env-file .env.image run --rm app php artisan route:cache
+            docker compose --env-file .env.image run --rm app php artisan view:cache
 
             echo "🔗 Ensuring storage link..."
-            docker compose --env-file .env --env-file .env.image run --rm app php artisan storage:link || true
+            docker compose --env-file .env.image run --rm app php artisan storage:link || true
 
             echo "🔁 Reloading Caddy web server..."
             sudo systemctl reload caddy || true
