@@ -36,7 +36,7 @@ COPY . .
 RUN composer install --optimize-autoloader --no-dev
 
 # Generate Laravel key
-RUN php artisan key:generate --ansi
+# RUN php artisan key:generate --ansi
 
 # Set permission
 RUN chown -R www-data:www-data storage bootstrap/cache
