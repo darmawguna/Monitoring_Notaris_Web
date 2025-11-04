@@ -1,4 +1,3 @@
-# Dockerfile
 FROM php:8.3-fpm
 
 # Install system dependencies
@@ -12,10 +11,15 @@ RUN apt-get update && apt-get install -y \
     unzip \
     nginx \
     supervisor \
+    libicu-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions
-RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd intl zip
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip \
+    && docker-php-ext-enable zip \
+    && docker-php-ext-configure intl \
+    && docker-php-ext-install intl \
+    && docker-php-ext-enable intl
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -23,23 +27,23 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Set working directory
 WORKDIR /var/www/html
 
-# Copy application files (kecuali yang di .dockerignore)
+# Copy application files
 COPY . .
 
 # Install PHP dependencies
 RUN composer install --optimize-autoloader --no-dev
 
-# Generate Laravel key (akan di-override oleh .env nanti, tapi aman)
+# Generate Laravel key
 RUN php artisan key:generate --ansi
 
 # Set permission
-RUN chown -R www-www-data storage bootstrap/cache
+RUN chown -R www-data:www-data storage bootstrap/cache
 RUN chmod -R 775 storage bootstrap/cache
 
 # Copy Nginx config
 COPY nginx.conf /etc/nginx/nginx.conf
 
-# Copy Supervisor config (untuk jalankan Nginx + PHP-FPM)
+# Copy Supervisor config
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 EXPOSE 80
