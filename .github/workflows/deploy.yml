@@ -1,29 +1,16 @@
 name: Deploy to VPS
 
 on:
-  workflow_run:
-    workflows: ["Build & Push Image (Docker Hub)"]
-    types: [completed]
-    branches: [main]
-  workflow_dispatch:
+  push:
+    branches: ["main"] # Pemicu sekarang hanya 'push'
 
 jobs:
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    name: Deploy to VPS
     runs-on: ubuntu-latest
-
     steps:
-      - name: Get short SHA
-        id: get_sha
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "sha_short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
-          else
-            echo "sha_short=$(echo ${{ github.event.workflow_run.head_sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
-          fi
-
       - name: Deploy to Server via SSH
-        uses: appleboy/ssh-action@v1.1.0
+        uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
@@ -31,60 +18,26 @@ jobs:
           port: 2607
           script: |
             set -e
-            PROJECT_DIR="/home/projectdarma/Monitoring_Notaris_Web"
-            cd "$PROJECT_DIR"
+            cd /home/projectdarma/Monitoring_Notaris_Web
 
-            echo "🔄 Pulling latest configuration..."
-            git fetch origin
-            git reset --hard origin/main
+            echo "🔄 Menarik kode terbaru dari branch main..."
+            git pull origin main
 
-            echo "🏷️ Setting image tag to: ${{ steps.get_sha.outputs.sha_short }}"
-            echo "IMAGE_TAG=${{ steps.get_sha.outputs.sha_short }}" > .env.image
+            echo "🏗️ Membangun ulang image Docker di server (ini mungkin memakan waktu)..."
+            # --no-cache memastikan semua langkah 'RUN' di Dockerfile dijalankan
+            # --remove-orphans membersihkan kontainer lama
+            docker compose up -d --build --no-cache --remove-orphans
 
-            echo "📦 Pulling latest Docker image..."
-            docker compose --env-file .env --env-file .env.image pull
+            echo "🔧 Menjalankan migrasi database..."
+            docker compose exec -T app php artisan migrate --force
+            
+            echo "🔗 Memastikan symbolic link storage..."
+            docker compose exec -T app php artisan storage:link
 
-            echo "⏹️ Stopping current services..."
-            docker compose --env-file .env --env-file .env.image down --remove-orphans
+            echo "🔁 Memuat ulang Caddy..."
+            sudo systemctl reload caddy
 
-            echo "🚀 Starting services with new image..."
-            docker compose --env-file .env --env-file .env.image up -d
+            echo "🗑️ Membersihkan image Docker yang tidak terpakai..."
+            docker image prune -f
 
-            echo "🩺 Applying PHP-FPM permission patch (if needed)..."
-            docker compose exec -T app sh -lc '
-              mkdir -p /usr/local/var/log &&
-              touch /usr/local/var/log/php-fpm.log &&
-              chmod 666 /usr/local/var/log/php-fpm.log || true
-            '
-
-            echo "🔧 Checking FPM configuration override..."
-            docker compose exec -T app sh -lc '
-              if grep -q "/usr/local/var/log/php-fpm.log" /usr/local/etc/php-fpm.conf 2>/dev/null; then
-                echo "→ Overriding FPM config to use /proc/self/fd/2"
-                sed -i "s|/usr/local/var/log/php-fpm.log|/proc/self/fd/2|g" /usr/local/etc/php-fpm.conf || true
-              fi
-            '
-
-            echo "🔁 Restarting app service to reload FPM..."
-            docker compose restart app
-            sleep 10
-
-            echo "🧹 Clearing caches first..."
-            docker compose --env-file .env --env-file .env.image run --rm app php artisan optimize:clear
-
-            echo "🔧 Running database migrations..."
-            docker compose --env-file .env --env-file .env.image run --rm app php artisan migrate --force
-
-            echo "🧩 Rebuilding assets and caches..."
-            docker compose --env-file .env --env-file .env.image run --rm app php artisan filament:assets || true
-            docker compose --env-file .env --env-file .env.image run --rm app php artisan config:cache
-            docker compose --env-file .env --env-file .env.image run --rm app php artisan route:cache
-            docker compose --env-file .env --env-file .env.image run --rm app php artisan view:cache
-
-            echo "🔗 Ensuring storage link..."
-            docker compose --env-file .env --env-file .env.image run --rm app php artisan storage:link || true
-
-            echo "🔁 Reloading Caddy web server..."
-            sudo systemctl reload caddy || true
-
-            echo "✅ Deployment successful!"
+            echo "✅ Deploy berhasil!"
