@@ -9,12 +9,10 @@ services:
     restart: unless-stopped
     env_file: .env
     volumes:
-      # Mount template agar bisa diupdate tanpa rebuild
       - ./storage/app/template:/var/www/html/storage/app/template
-      # Opsional: mount .env jika ingin update tanpa rebuild
       - ./.env:/var/www/html/.env
     ports:
-      - "127.0.0.1:8080:80"  # hanya bind ke localhost
+      - "127.0.0.1:8080:80"
     networks:
       - app_network
     depends_on:
@@ -32,9 +30,9 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD}
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
     volumes:
-      - db_/var/lib/mysql
+      - db_data:/var/lib/mysql
     ports:
-      - "127.0.0.1:3306:3306"  # opsional, hanya untuk debug
+      - "127.0.0.1:3306:3306"
     networks:
       - app_network
     healthcheck:
@@ -48,4 +46,4 @@ networks:
     driver: bridge
 
 volumes:
-  db_
+  db_data:  # ← ini harus mapping, bukan list!
