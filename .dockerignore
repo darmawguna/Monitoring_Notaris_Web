@@ -72,6 +72,3 @@ azure-pipelines.yml
 *.sql
 *.backup
 backup_*
-
-nginx.conf
-supervisord.conf
