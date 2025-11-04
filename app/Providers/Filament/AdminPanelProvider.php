@@ -35,12 +35,8 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->login()
             ->databaseNotifications()
-            // ->colors([
-            //     'primary' => Color::Amber,
-            // ])
+            ->globalSearch(false)
             ->brandLogo(asset('images/logo-complete.svg'))
-
-
             // 2. Mengatur favicon (ikon di tab browser)
             ->favicon(asset('images/logo.svg'))
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')

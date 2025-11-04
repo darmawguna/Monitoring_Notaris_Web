@@ -22,10 +22,9 @@ use Illuminate\Database\Eloquent\Model;
 class BerkasSelesaiWidget extends BaseWidget
 {
     protected static ?int $sort = 1;
-    protected int | string | array $columnSpan = 'full';
+    protected int|string|array $columnSpan = 'full';
     protected static bool $isLazy = false;
 
-    // Widget ini hanya untuk 'Petugas Entry'
     public static function canView(): bool
     {
         return auth()->user()->role->name === 'Petugas Entry';
@@ -38,7 +37,6 @@ class BerkasSelesaiWidget extends BaseWidget
 
     protected function getTableQuery(): Builder
     {
-        // Ambil semua tugas 'PENYERAHAN' yang ditugaskan ke pengguna ini
         return Progress::query()
             ->where('assignee_id', auth()->id())
             ->where('status', 'pending')
@@ -46,13 +44,30 @@ class BerkasSelesaiWidget extends BaseWidget
             ->with(['progressable']);
     }
 
+    // --- PERBAIKAN 1: TAMBAHKAN METODE table() ---
+    /**
+     * Mendefinisikan struktur tabel utama, termasuk pencarian.
+     */
+    public function table(Tables\Table $table): Tables\Table
+    {
+        return $table
+            ->query($this->getTableQuery())
+            ->columns($this->getTableColumns())
+            ->actions($this->getTableActions())
+            // Aktifkan kotak pencarian untuk widget ini
+            ->searchable();
+    }
+
     protected function getTableColumns(): array
     {
-        // Gunakan logika polimorfik yang sama seperti di TugasResource
         return [
+            // --- PERBAIKAN 2: TAMBAHKAN LOGIKA PENCARIAN KE KOLOM INI ---
             TextColumn::make('progressable.identifier')
                 ->label('Nomor / Nama Dokumen')
                 ->state(function (Progress $record): string {
+                    if (!$record->progressable) {
+                        return 'N/A (Data Induk Hilang)';
+                    }
                     return match (get_class($record->progressable)) {
                         Berkas::class => $record->progressable->nomor_berkas,
                         Perbankan::class => $record->progressable->nama_debitur,
@@ -60,10 +75,32 @@ class BerkasSelesaiWidget extends BaseWidget
                         TandaTerimaSertifikat::class => $record->progressable->penerima,
                         default => 'N/A',
                     };
+                })
+                // Tambahkan logika pencarian polimorfik yang sama seperti di TugasResource
+                ->searchable(query: function (Builder $query, string $search): Builder {
+                    return $query->whereHasMorph('progressable', [
+                        Berkas::class,
+                        Perbankan::class,
+                        TurunWaris::class,
+                        TandaTerimaSertifikat::class
+                    ], function (Builder $query, string $type) use ($search) {
+                        $column = match ($type) {
+                            Berkas::class => 'nomor_berkas',
+                            Perbankan::class => 'nama_debitur',
+                            TurunWaris::class => 'nama_kasus',
+                            TandaTerimaSertifikat::class => 'penerima',
+                            default => 'id', // Fallback
+                        };
+                        $query->where($column, 'like', "%{$search}%");
+                    });
                 }),
+
             TextColumn::make('progressable.type')
                 ->label('Jenis Dokumen')
                 ->state(function (Progress $record): string {
+                    if (!$record->progressable) {
+                        return 'Tidak Dikenal';
+                    }
                     return match (get_class($record->progressable)) {
                         Berkas::class => 'Berkas Peralihan Hak',
                         Perbankan::class => 'Berkas Perbankan',
@@ -81,6 +118,9 @@ class BerkasSelesaiWidget extends BaseWidget
         return [
             Tables\Actions\ViewAction::make()
                 ->url(function (Progress $record): string {
+                    if (!$record->progressable) {
+                        return '#';
+                    }
                     $parent = $record->progressable;
                     return match (get_class($parent)) {
                         Berkas::class => BerkasResource::getUrl('view', ['record' => $parent]),
@@ -93,3 +133,4 @@ class BerkasSelesaiWidget extends BaseWidget
         ];
     }
 }
+

@@ -41,6 +41,8 @@ RUN composer install --optimize-autoloader --no-dev
 # Set permission
 RUN chown -R www-data:www-data storage bootstrap/cache
 RUN chmod -R 775 storage bootstrap/cache
+RUN chown -R www-data:www-data /var/www/html/storage \
+ && chmod -R 775 /var/www/html/storage
 
 # Copy Nginx config
 COPY nginx.conf /etc/nginx/nginx.conf

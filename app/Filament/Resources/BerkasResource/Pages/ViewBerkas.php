@@ -29,17 +29,34 @@ class ViewBerkas extends ViewRecord
             Action::make('processTask')
                 ->label('Proses Tugas Ini')
                 ->icon('heroicon-o-arrow-right-circle')
-                // Logika visibilitas dan form Anda sudah benar, tidak perlu diubah
                 ->visible(function (): bool {
                     $user = auth()->user();
+                    /** @var \App\Models\Berkas $record */
                     $record = $this->getRecord();
-                    if (in_array($user->role->name, ['Superadmin', 'FrontOffice'])) {
+
+                    // Sembunyikan untuk Superadmin dan Petugas Entry
+                    if (in_array($user->role->name, ['Superadmin', 'Petugas Entry'])) {
                         return false;
                     }
+                    // Tampilkan hanya jika petugas ini punya tugas 'pending' di berkas ini
                     return $record->progress()->where('assignee_id', $user->id)->where('status', 'pending')->exists();
                 })
+
+                // --- FORM DIPERBARUI ---
                 ->form(function () {
+                    /** @var \App\Models\Berkas $record */
                     $record = $this->getRecord();
+
+                    // Jika tahapnya PENYERAHAN, hanya tampilkan catatan
+                    if ($record->current_stage_key === StageKey::PENYERAHAN) {
+                        return [
+                            Textarea::make('notes')->label('Catatan Pengerjaan Final')
+                                ->helperText('Contoh: Telah diserahkan ke klien pada tanggal...')
+                                ->required(),
+                        ];
+                    }
+
+                    // Logika form untuk tahap-tahap sebelumnya
                     $nextRoleName = match ($record->current_stage_key) {
                         StageKey::PETUGAS_PENGETIKAN => 'Petugas Pajak',
                         StageKey::PETUGAS_PAJAK => 'Petugas Penyiapan',
@@ -51,10 +68,11 @@ class ViewBerkas extends ViewRecord
                             Select::make('next_assignee_id')->label("Teruskan ke Petugas {$nextRoleName}")->options(User::whereHas('role', fn($q) => $q->where('name', $nextRoleName))->pluck('name', 'id'))->searchable()->preload()->required(),
                         ];
                     }
+                    // Fallback untuk tahap terakhir sebelum penyerahan
                     return [Textarea::make('notes')->label('Catatan Pengerjaan Final')->required()];
                 })
 
-                // --- INI BAGIAN YANG DIPERBARUI SECARA TOTAL ---
+                // --- AKSI DIPERBARUI TOTAL ---
                 ->action(function (array $data): void {
                     $user = auth()->user();
                     /** @var \App\Models\Berkas $record */
@@ -96,30 +114,39 @@ class ViewBerkas extends ViewRecord
                             Notification::make()->title('Anda menerima tugas baru!')->sendToDatabase($nextAssignee);
                         }
                     } else {
-                        // 4. Jika TIDAK ADA tahap selanjutnya, buat tugas "Penyerahan" untuk Petugas Entry
-                        $record->update([
-                            'status_overall' => BerkasStatus::SELESAI,
-                            'current_stage_key' => StageKey::PENYERAHAN,
-                        ]);
-
-                        // Ganti 'Petugas Entry' dengan nama peran Anda yang benar
-                        $frontOfficeUsers = User::whereHas('role', fn($q) => $q->where('name', 'Petugas Entry'))->get();
-
-                        foreach ($frontOfficeUsers as $foUser) {
-                            $record->progress()->create([
-                                'stage_key' => StageKey::PENYERAHAN,
-                                'status' => 'pending',
-                                'assignee_id' => $foUser->id,
-                                'notes' => 'Berkas telah menyelesaikan alur kerja dan siap untuk diserahkan/diarsipkan.',
+                        // 4. Jika TIDAK ADA tahap selanjutnya...
+        
+                        // Periksa apakah tahap saat ini BUKAN penyerahan
+                        if ($record->current_stage_key !== StageKey::PENYERAHAN) {
+                            // Ini adalah petugas terakhir (misal: Petugas Penyiapan)
+                            // Buat tugas "Penyerahan" untuk Petugas Entry
+                            $record->update([
+                                'status_overall' => BerkasStatus::SELESAI,
+                                'current_stage_key' => StageKey::PENYERAHAN,
                             ]);
-                        }
 
-                        if ($frontOfficeUsers->isNotEmpty()) {
-                            $identifier = $record->nomor_berkas ?? 'sebuah berkas';
-                            Notification::make()
-                                ->title('Berkas Selesai: Siap untuk Penyerahan')
-                                ->body("Berkas '{$identifier}' telah menyelesaikan alur pengerjaan.")
-                                ->sendToDatabase($frontOfficeUsers);
+                            $frontOfficeUsers = User::whereHas('role', fn($q) => $q->where('name', 'Petugas Entry'))->get();
+
+                            foreach ($frontOfficeUsers as $foUser) {
+                                $record->progress()->create([
+                                    'stage_key' => StageKey::PENYERAHAN,
+                                    'status' => 'pending',
+                                    'assignee_id' => $foUser->id,
+                                    'notes' => 'Berkas telah menyelesaikan alur kerja dan siap untuk diserahkan/diarsipkan.',
+                                ]);
+                            }
+
+                            if ($frontOfficeUsers->isNotEmpty()) {
+                                $identifier = $record->nomor_berkas ?? 'sebuah berkas';
+                                Notification::make()
+                                    ->title('Berkas Selesai: Siap untuk Penyerahan')
+                                    ->body("Berkas '{$identifier}' telah menyelesaikan alur pengerjaan.")
+                                    ->sendToDatabase($frontOfficeUsers);
+                            }
+                        } else {
+                            $record->update([
+                                'status_overall' => BerkasStatus::SELESAI,
+                            ]);
                         }
                     }
 

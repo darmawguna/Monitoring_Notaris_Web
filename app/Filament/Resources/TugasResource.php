@@ -39,9 +39,11 @@ class TugasResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
+        // Query sekarang jauh lebih sederhana dan akurat
         return parent::getEloquentQuery()
             ->where('assignee_id', auth()->id())
             ->where('status', 'pending')
+            // Eager load relasi polimorfik 'progressable' untuk efisiensi
             ->with(['progressable']);
     }
 
@@ -61,15 +63,37 @@ class TugasResource extends Resource
     {
         return $table
             ->columns([
+                TextColumn::make('nomor_berkas')
+                    ->label('Nomor Berkas')
+                    ->state(function (Progress $record): string {
+                        if (!$record->progressable) {
+                            return '-';
+                        }
+                        // Hanya tampilkan nomor untuk model yang memilikinya
+                        return match (get_class($record->progressable)) {
+                            Berkas::class => $record->progressable->nomor_berkas,
+                            TandaTerimaSertifikat::class => $record->progressable->nomor_berkas,
+                            default => '-',
+                        };
+                    })
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        // Logika pencarian hanya untuk model yang relevan
+                        return $query->whereHasMorph('progressable', [
+                            Berkas::class,
+                            TandaTerimaSertifikat::class
+                        ], function (Builder $query) use ($search) {
+                            $query->where('nomor_berkas', 'like', "%{$search}%");
+                        });
+                    }),
                 TextColumn::make('progressable.identifier')
-                    ->label('Nomor Dokumen')
+                    ->label('Nama Dokumen')
                     ->state(function (Progress $record): string {
                         // Periksa apakah relasi progressable ada sebelum mengakses propertinya
                         if (!$record->progressable) {
                             return 'N/A (Data Induk Hilang)';
                         }
                         return match (get_class($record->progressable)) {
-                            Berkas::class => $record->progressable->nomor_berkas,
+                            Berkas::class => $record->progressable->nama_pemohon,
                             Perbankan::class => $record->progressable->nama_debitur,
                             TurunWaris::class => $record->progressable->nama_kasus,
                             TandaTerimaSertifikat::class => $record->progressable->penerima,
@@ -84,7 +108,7 @@ class TugasResource extends Resource
                             TandaTerimaSertifikat::class
                         ], function (Builder $query, string $type) use ($search) {
                             $column = match ($type) {
-                                Berkas::class => 'nomor_berkas',
+                                Berkas::class => 'nama_pemohon',
                                 Perbankan::class => 'nama_debitur',
                                 TurunWaris::class => 'nama_kasus',
                                 TandaTerimaSertifikat::class => 'penerima',
@@ -136,8 +160,6 @@ class TugasResource extends Resource
                     ->icon('heroicon-o-arrow-right-circle')
                     ->form(function (Progress $record) {
                         $parent = $record->progressable;
-
-                        // Jika tahapnya PENYERAHAN, jangan tampilkan form "Teruskan ke"
                         if ($parent->current_stage_key === StageKey::PENYERAHAN) {
                             return [
                                 Textarea::make('notes')->label('Catatan Pengerjaan Final')
@@ -145,14 +167,11 @@ class TugasResource extends Resource
                                     ->required(),
                             ];
                         }
-
-                        // Logika form untuk tahap-tahap sebelumnya
                         $nextRoleName = match ($parent->current_stage_key) {
                             StageKey::PETUGAS_PENGETIKAN => 'Petugas Pajak',
                             StageKey::PETUGAS_PAJAK => 'Petugas Penyiapan',
                             default => null,
                         };
-
                         if ($nextRoleName) {
                             return [
                                 Textarea::make('notes')->label('Catatan Pengerjaan')->required(),
@@ -162,33 +181,24 @@ class TugasResource extends Resource
                                     ->searchable()->preload()->required(),
                             ];
                         }
-
-                        // Fallback untuk tahap terakhir sebelum penyerahan
                         return [Textarea::make('notes')->label('Catatan Pengerjaan Final')->required()];
                     })
                     ->action(function (Progress $record, array $data): void {
                         $parentRecord = $record->progressable;
-
-                        // 1. Selesaikan tugas saat ini
                         $record->update([
                             'notes' => $data['notes'],
                             'status' => 'done',
                             'completed_at' => now(),
                         ]);
-
-                        // 2. Tentukan tahap selanjutnya
                         $nextStage = match ($parentRecord->current_stage_key) {
                             StageKey::PETUGAS_PENGETIKAN => StageKey::PETUGAS_PAJAK,
                             StageKey::PETUGAS_PAJAK => StageKey::PETUGAS_PENYIAPAN,
                             default => null,
                         };
                         $nextAssigneeId = $data['next_assignee_id'] ?? null;
-
-                        // 3. Jika ADA tahap selanjutnya, teruskan seperti biasa
                         if ($nextStage && $nextAssigneeId) {
                             $deadlineDays = \App\Models\DeadlineConfig::where('stage_key', $nextStage)->value('default_days') ?? 3;
                             $deadline = \Illuminate\Support\Carbon::now()->addDays($deadlineDays);
-
                             $parentRecord->progress()->create([
                                 'stage_key' => $nextStage,
                                 'status' => 'pending',
@@ -196,18 +206,12 @@ class TugasResource extends Resource
                                 'deadline' => $deadline,
                             ]);
                             $parentRecord->update(['current_stage_key' => $nextStage]);
-
                             $nextAssignee = User::find($nextAssigneeId);
                             if ($nextAssignee) {
                                 Notification::make()->title('Anda menerima tugas baru!')->sendToDatabase($nextAssignee);
                             }
                         } else {
-                            // 4. Jika TIDAK ADA tahap selanjutnya...
-            
-                            // Periksa apakah tahap saat ini BUKAN penyerahan
                             if ($parentRecord->current_stage_key !== StageKey::PENYERAHAN) {
-                                // Ini adalah petugas terakhir (misal: Petugas Penyiapan)
-                                // Buat tugas "Penyerahan" untuk Petugas Entry
                                 $parentRecord->update([
                                     'status_overall' => BerkasStatus::SELESAI,
                                     'current_stage_key' => StageKey::PENYERAHAN,
@@ -239,15 +243,11 @@ class TugasResource extends Resource
                                         ->sendToDatabase($frontOfficeUsers);
                                 }
                             } else {
-                                // Jika tahap saat ini SUDAH PENYERAHAN, berarti
-                                // Petugas Entry telah menyelesaikan tugas akhirnya.
-                                // Cukup pastikan statusnya Selesai dan jangan lakukan apa-apa lagi.
                                 $parentRecord->update([
                                     'status_overall' => BerkasStatus::SELESAI,
                                 ]);
                             }
                         }
-
                         Notification::make()->title('Tugas berhasil diproses')->success()->send();
                     }),
             ])

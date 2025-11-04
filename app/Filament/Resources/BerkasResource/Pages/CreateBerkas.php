@@ -29,7 +29,6 @@ class CreateBerkas extends CreateRecord
         // Pisahkan data petugas dari data utama
         $petugas2Id = $data['petugas_pengetikan_id'];
         unset($data['petugas_pengetikan_id']);
-
         // Set tahap awal saat berkas dibuat
         $data['current_stage_key'] = StageKey::PETUGAS_PENGETIKAN;
 

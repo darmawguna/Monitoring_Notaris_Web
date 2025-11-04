@@ -33,22 +33,6 @@ class TandaTerimaSertifikatResource extends Resource
     protected static ?string $navigationLabel = 'Tanda Terima Sertifikat';
     protected static ?string $navigationGroup = 'Berkas';
     protected static ?string $recordTitleAttribute = 'nomor_berkas';
-
-    /**
-     * Izinkan pencarian berdasarkan nomor berkas, penyerah, dan penerima.
-     */
-    protected static array $globallySearchableAttributes = [
-        'nomor_berkas',
-        'penyerah',
-        'penerima'
-    ];
-    public static function getGlobalSearchResultDetails(Model $record): array
-    {
-        return [
-            'Penyerah' => $record->penyerah,
-            'Penerima' => $record->penerima,
-        ];
-    }
     public static function canViewAny(): bool
     {
         $user = auth()->user();

@@ -53,27 +53,6 @@ class BerkasResource extends Resource
     protected static ?string $navigationLabel = 'Berkas Peralihan Hak';
     protected static ?string $navigationGroup = 'Berkas';
     protected static ?string $recordTitleAttribute = 'nomor_berkas';
-
-    /**
-     * Izinkan pencarian berdasarkan nomor berkas, jenis berkas, dan nama pemohon.
-     */
-    protected static array $globallySearchableAttributes = [
-        'nomor_berkas',
-        'nama_berkas',
-        'nama_pemohon'
-    ];
-
-    /**
-     * Tampilkan detail tambahan di hasil pencarian.
-     */
-    public static function getGlobalSearchResultDetails(Model $record): array
-    {
-        return [
-            'Jenis Berkas' => $record->nama_berkas,
-            'Pemohon' => $record->nama_pemohon,
-        ];
-    }
-
     public static function getEloquentQuery(): Builder
     {
         $user = auth()->user();
@@ -309,11 +288,16 @@ class BerkasResource extends Resource
                             ->mutateRelationshipDataBeforeFillUsing(function (array $data): array {
                                 $standardOptions = ['ktp_suami', 'ktp_istri', 'kk', 'sertifikat', 'pbb'];
                                 if (!in_array($data['type'], $standardOptions)) {
-                                    // ...maka "suntikkan" nilai tersebut ke field 'type_lainnya'
                                     $data['type_lainnya'] = $data['type'];
-                                    // dan atur 'type' kembali ke 'lainnya' agar dropdown dan text input muncul
                                     $data['type'] = 'lainnya';
                                 }
+                                return $data;
+                            })
+                            ->mutateRelationshipDataBeforeCreateUsing(function (array $data): array {
+                                if ($data['type'] === 'lainnya' && isset($data['type_lainnya'])) {
+                                    $data['type'] = $data['type_lainnya'];
+                                }
+                                unset($data['type_lainnya']);
                                 return $data;
                             })
                             ->mutateRelationshipDataBeforeSaveUsing(function (array $data): array {
@@ -391,14 +375,10 @@ class BerkasResource extends Resource
                         // Tampilkan nama petugas dari progres tersebut
                         return $latestPendingProgress?->assignee?->name ?? 'Belum ditugaskan';
                     }),
-
-                // --- AKHIR DARI PERUBAHAN ---
             ])
             ->actions([
                 ViewAction::make()->url(fn($record) => self::getUrl('view', ['record' => $record])),
-                // ViewAction::make()->url(fn(Berkas $record) => BerkasResource::getUrl('view', ['record' => $record])),
             ])
-
             ->filters([
                 SelectFilter::make('current_stage_key')
                     ->label('Tahapan')

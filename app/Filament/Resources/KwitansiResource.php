@@ -28,6 +28,7 @@ use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Collection;
 
 class KwitansiResource extends Resource
@@ -38,7 +39,6 @@ class KwitansiResource extends Resource
     protected static ?string $pluralModelLabel = 'Audit Kwitansi';
     protected static ?string $navigationLabel = 'Kwitansi';
     protected static ?string $navigationGroup = 'Keuangan';
-
     public static function canViewAny(): bool
     {
         $user = auth()->user();

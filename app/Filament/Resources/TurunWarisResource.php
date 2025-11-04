@@ -32,8 +32,7 @@ class TurunWarisResource extends Resource
     protected static ?string $modelLabel = 'Berkas Diluar Peralihan Hak';
     protected static ?string $pluralModelLabel = 'Berkas Diluar Peralihan Hak';
     protected static ?string $navigationLabel = 'Berkas Diluar Peralihan Hak';
-    protected static ?string $navigationGroup = 'Berkas'; // Grupkan bersama "Berkas Jual Beli"
-
+    protected static ?string $navigationGroup = 'Berkas';
     public static function getEloquentQuery(): Builder
     {
         $user = auth()->user();
@@ -136,6 +135,13 @@ class TurunWarisResource extends Resource
                                     // dan atur 'type' kembali ke 'lainnya' agar dropdown dan text input muncul
                                     $data['type'] = 'lainnya';
                                 }
+                                return $data;
+                            })
+                            ->mutateRelationshipDataBeforeCreateUsing(function (array $data): array {
+                                if ($data['type'] === 'lainnya' && isset($data['type_lainnya'])) {
+                                    $data['type'] = $data['type_lainnya'];
+                                }
+                                unset($data['type_lainnya']);
                                 return $data;
                             })
                             ->mutateRelationshipDataBeforeSaveUsing(function (array $data): array {

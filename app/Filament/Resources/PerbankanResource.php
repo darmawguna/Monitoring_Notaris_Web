@@ -48,26 +48,6 @@ class PerbankanResource extends Resource
     // protected static ?int $navigationSort = 4;
     protected static ?string $recordTitleAttribute = 'nama_debitur';
 
-    /**
-     * Izinkan pencarian berdasarkan nama debitur, nomor PK, dan nama kreditur.
-     */
-    protected static array $globallySearchableAttributes = [
-        'nama_debitur',
-        'nomor_pk',
-        'nama_kreditur'
-    ];
-
-    /**
-     * Tampilkan detail tambahan di hasil pencarian.
-     */
-    public static function getGlobalSearchResultDetails(Model $record): array
-    {
-        return [
-            'Kreditur' => $record->nama_kreditur,
-            'Nomor PK' => $record->nomor_pk,
-        ];
-    }
-
     public static function getEloquentQuery(): Builder
     {
         $user = auth()->user();
