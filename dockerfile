@@ -1,46 +1,47 @@
-# Gunakan base image PHP FPM yang ringan
-FROM php:8.2-fpm-alpine
+# Dockerfile
+FROM php:8.3-fpm
 
-# Instal semua dependensi yang dibutuhkan dalam satu layer
-# Termasuk build tools dan runtime tools
-RUN apk add --no-cache \
-    nginx supervisor git curl zip unzip bash shadow \
-    icu-dev libzip-dev freetype-dev libpng-dev libjpeg-turbo-dev libxml2-dev \
-    mysql-client nodejs npm
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    zip \
+    unzip \
+    nginx \
+    supervisor \
+    && rm -rf /var/lib/apt/lists/*
 
-# Instal ekstensi PHP
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
- && docker-php-ext-install -j"$(nproc)" pdo_mysql zip gd intl bcmath opcache
+# Install PHP extensions
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
 
-# Instal Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
+# Set working directory
 WORKDIR /var/www/html
 
-# Salin semua file dari konteks build (dari direktori proyek di VPS)
-# .dockerignore akan mencegah penyalinan node_modules dan vendor lokal
+# Copy application files (kecuali yang di .dockerignore)
 COPY . .
 
-# Jalankan instalasi dependensi backend dan frontend
-RUN composer install --no-dev --no-interaction --optimize-autoloader
-RUN npm ci
-RUN npm run build
+# Install PHP dependencies
+RUN composer install --optimize-autoloader --no-dev
 
-# Jalankan optimasi Laravel
-# Buat .env sementara agar artisan bisa berjalan
-RUN cp .env.example .env && php artisan key:generate
-RUN php artisan optimize:clear
-RUN php artisan config:cache
-RUN php artisan route:cache
-RUN php artisan view:cache
-RUN php artisan filament:assets
-RUN php artisan filament:cache-components
+# Generate Laravel key (akan di-override oleh .env nanti, tapi aman)
+RUN php artisan key:generate --ansi
 
-# Salin konfigurasi Supervisor
-COPY docker/supervisor/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+# Set permission
+RUN chown -R www-www-data storage bootstrap/cache
+RUN chmod -R 775 storage bootstrap/cache
 
-# Atur kepemilikan file
-RUN chown -R www-data:www-data storage bootstrap/cache public/build
+# Copy Nginx config
+COPY nginx.conf /etc/nginx/nginx.conf
 
-EXPOSE 9000
+# Copy Supervisor config (untuk jalankan Nginx + PHP-FPM)
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+EXPOSE 80
+
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

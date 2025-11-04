@@ -1,73 +1,51 @@
+version: '3.8'
+
 services:
   app:
     build:
-      context: . # <-- Beritahu Docker untuk build dari direktori ini
-    container_name: docuhub_app
+      context: .
+      dockerfile: Dockerfile
+    container_name: notarisku_app
     restart: unless-stopped
-    env_file: [.env]
+    env_file: .env
     volumes:
-      # Mount seluruh direktori kode
-      - .:/var/www/html
-    networks: [docuhub_network]
+      # Mount template agar bisa diupdate tanpa rebuild
+      - ./storage/app/template:/var/www/html/storage/app/template
+      # Opsional: mount .env jika ingin update tanpa rebuild
+      - ./.env:/var/www/html/.env
+    ports:
+      - "127.0.0.1:8080:80"  # hanya bind ke localhost
+    networks:
+      - app_network
     depends_on:
       db:
         condition: service_healthy
 
-  web:
-    image: nginx:1.27-alpine
-    container_name: docuhub_web
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:9002:80"
-    volumes:
-      # Mount HANYA folder public dari host
-      - ./public:/var/www/html/public:ro
-      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-    networks: [docuhub_network]
-    depends_on: [app]
-
   db:
     image: mysql:8.0
-    container_name: docuhub_db
+    container_name: notarisku_db
     restart: unless-stopped
-    env_file: [.env]
+    env_file: .env
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
     volumes:
-      - db_data:/var/lib/mysql
-    networks: [docuhub_network]
+      - db_/var/lib/mysql
+    ports:
+      - "127.0.0.1:3306:3306"  # opsional, hanya untuk debug
+    networks:
+      - app_network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${DB_USERNAME}", "-p${DB_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  queue:
-    build:
-      context: . # <-- Bangun dari direktori ini juga
-    container_name: docuhub_queue
-    restart: unless-stopped
-    command: php artisan queue:work --sleep=3 --tries=3 --max-time=3600
-    env_file: [.env]
-    volumes:
-      - .:/var/www/html
-    networks: [docuhub_network]
-    depends_on: [app, db]
-
-  schedule:
-    build:
-      context: . # <-- Bangun dari direktori ini juga
-    container_name: docuhub_schedule
-    restart: unless-stopped
-    command: sh -c "while true; do php artisan schedule:run --verbose --no-interaction & sleep 60; done"
-    env_file: [.env]
-    volumes:
-      - .:/var/www/html
-    networks: [docuhub_network]
-    depends_on: [app, db]
-
 networks:
-  docuhub_network:
+  app_network:
     driver: bridge
 
 volumes:
-  db_data:
-    driver: local
+  db_
