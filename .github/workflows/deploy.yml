@@ -51,9 +51,10 @@ jobs:
             docker compose --env-file .env --env-file .env.image up -d
 
             echo "⏳ Waiting for application to be healthy..."
-            sleep 15 # Beri waktu agar kontainer app stabil
-
+            sleep 15
+            
             echo "🔐 Fixing storage volume permissions..."
+            # 1000 adalah PUID dari www-data yang kita atur di Dockerfile
             docker compose exec -T -u root app chown -R 1000:1000 /var/www/html/storage
 
             echo "🔧 Running database migrations..."
@@ -64,15 +65,16 @@ jobs:
 
             echo "🧹 Clearing and optimizing caches..."
             docker compose --env-file .env.image run --rm app php artisan optimize:clear
-            docker compose --env-file .env.image run --rm app php artisan filament:assets || true
+            docker compose --env-file .env.image run --rm app php artisan filament:assets
             docker compose --env-file .env.image run --rm app php artisan config:cache
             docker compose --env-file .env.image run --rm app php artisan route:cache
             docker compose --env-file .env.image run --rm app php artisan view:cache
 
             echo "🔗 Ensuring storage link..."
-            docker compose --env-file .env.image run --rm app php artisan storage:link || true
+            docker compose --env-file .env.image run --rm app php artisan storage:link
 
             echo "🔁 Reloading Caddy web server..."
             sudo systemctl reload caddy || true
 
             echo "✅ Deployment successful!"
+
