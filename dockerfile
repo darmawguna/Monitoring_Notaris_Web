@@ -12,14 +12,16 @@ RUN apt-get update && apt-get install -y \
     nginx \
     supervisor \
     libicu-dev \
+    libzip-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions
-RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip \
-    && docker-php-ext-enable zip \
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd \
     && docker-php-ext-configure intl \
     && docker-php-ext-install intl \
-    && docker-php-ext-enable intl
+    && docker-php-ext-enable intl \
+    && docker-php-ext-install zip \
+    && docker-php-ext-enable zip
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
