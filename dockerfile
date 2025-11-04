@@ -41,5 +41,7 @@ RUN chown -R www-data:www-data storage bootstrap/cache
 
 EXPOSE 9000
 
+USER www-data
+
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 

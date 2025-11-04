@@ -54,7 +54,8 @@ jobs:
             sleep 15 # Beri waktu agar kontainer app stabil
 
             echo "🔐 Fixing storage volume permissions..."
-            docker compose exec -T -u root app chown -R 1000:1000 /var/www/html/storage
+            docker compose exec -T -u root app chown -R www-data:www-data /var/www/html/storage
+            docker compose exec -T -u root app chmod -R 775 /var/www/html/storage
 
             echo "🔧 Running database migrations..."
             docker compose --env-file .env.image run --rm app php artisan migrate --force
