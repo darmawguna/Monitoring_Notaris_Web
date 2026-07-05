@@ -1,8 +1,8 @@
-name: Build & Push Image (Docker Hub)
+name: Build & Push Image
 
 on:
   push:
-    branches: ["production"]
+    branches: [production]
   workflow_dispatch:
 
 env:
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       sha_short: ${{ steps.vars.outputs.sha_short }}
-      
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -35,7 +35,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./Dockerfile
+          file: ./dockerfile
           target: production
           push: true
           tags: |
@@ -43,9 +43,6 @@ jobs:
             ${{ env.DOCKER_IMAGE }}:${{ steps.vars.outputs.sha_short }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-args: |
-            PUID=1000
-            PGID=1000
 
       - name: Image digest
         run: echo "Image pushed with tags latest and ${{ steps.vars.outputs.sha_short }}"

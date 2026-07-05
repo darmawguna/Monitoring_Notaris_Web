@@ -6,7 +6,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy Laravel to VPS
+    name: Deploy NotarisKu to VPS
     runs-on: ubuntu-latest
 
     steps:
@@ -16,40 +16,46 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
-          port: 2607  # sesuaikan jika berbeda
+          port: ${{ secrets.VPS_SSH_PORT || 22 }}
           script: |
             set -e
 
             PROJECT_DIR="/home/projectdarma/Monitoring_Notaris_Web"
             cd "$PROJECT_DIR"
 
-            echo "🔄 Pulling latest code from GitHub..."
-            git fetch origin
-            git reset --hard origin/main
+            echo "🔄 Pulling latest code..."
+            git fetch origin production
+            git reset --hard origin/production
 
-            echo "📦 Building and pulling Docker images..."
-            docker compose build --pull --no-cache
-            docker compose down --remove-orphans
+            echo "📦 Pulling latest Docker image..."
+            docker compose pull app 2>/dev/null || true
 
-            echo "🚀 Starting services..."
-            docker compose up -d
+            echo "🏗️ Building images..."
+            docker compose build --pull
 
-            echo "⏳ Waiting for app to be ready..."
-            sleep 10
+            echo "🚀 Rolling update..."
+            docker compose up -d --remove-orphans
 
-            echo "🔧 Running database migrations..."
+            echo "⏳ Waiting for app to be healthy..."
+            sleep 15
+
+            echo "🔧 Running migrations..."
             docker compose exec -T app php artisan migrate --force
 
-            echo "🧹 Clearing and optimizing cache..."
+            echo "🧹 Optimizing..."
             docker compose exec -T app php artisan optimize:clear
             docker compose exec -T app php artisan config:cache
             docker compose exec -T app php artisan route:cache
             docker compose exec -T app php artisan view:cache
+            docker compose exec -T app php artisan event:cache
 
-            echo "🔗 Ensuring storage link..."
-            docker compose exec -T app php artisan storage:link
+            echo "🔗 Storage link..."
+            docker compose exec -T app php artisan storage:link 2>/dev/null || true
 
-            echo "🔁 Reloading Caddy..."
-            sudo systemctl reload caddy
+            echo "🔁 Reloading reverse proxy..."
+            sudo systemctl reload caddy 2>/dev/null || sudo systemctl reload nginx 2>/dev/null || true
 
-            echo "✅ Deployment completed successfully!"
+            echo "🧹 Cleaning up old images..."
+            docker image prune -f
+
+            echo "✅ Deployment completed!"
