@@ -8,11 +8,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Models\Concerns\HasProgress;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\MorphMany; // <-- Tambahkan ini
 
 class Perbankan extends Model
 {
-    use HasFactory, HasProgress; // Trait HasFiles tidak diperlukan di sini
+    use HasFactory, HasProgress;
 
     protected $fillable = [
         'tipe_pemohon',

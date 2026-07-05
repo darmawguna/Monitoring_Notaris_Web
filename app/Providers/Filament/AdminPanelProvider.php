@@ -9,8 +9,6 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
-use Filament\Support\Colors\Color;
-use App\Filament\Pages\Laporan;
 use Filament\Widgets;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -22,7 +20,6 @@ use App\Filament\Widgets\StatsOverview;
 use App\Filament\Widgets\BerkasTerbaru;
 use App\Filament\Widgets\KwitansiTerbaru;
 use App\Filament\Widgets\PerbankanWidget;
-use Filament\Support\Facades\FilamentView;
 
 // TODO lakukan stress test untuk mengukur kekuatan dari sistem
 class AdminPanelProvider extends PanelProvider

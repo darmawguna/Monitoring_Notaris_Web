@@ -41,11 +41,14 @@
                 {{-- --- INI BAGIAN YANG DIPERBARUI SECARA TOTAL --- --}}
                 @php
                     // Definisikan label yang lebih ramah untuk klien
+                    // Key harus sesuai dengan enum StageKey
                     $stage_labels = [
-                        'front_office' => 'Penerimaan Berkas',
-                        'petugas_2' => 'Verifikasi Internal',
-                        'pajak' => 'Proses Pajak',
-                        'petugas_5' => 'Proses Finalisasi',
+                        'petugas_entry' => 'Penerimaan Berkas',
+                        'petugas pengetikan' => 'Verifikasi Internal',
+                        'petugas pajak' => 'Proses Pajak',
+                        'petugas penyiapan' => 'Proses Penyiapan',
+                        'petugas bpn' => 'Proses BPN',
+                        'penyerahan' => 'Penyerahan',
                         'selesai' => 'Selesai',
                     ];
                 @endphp
